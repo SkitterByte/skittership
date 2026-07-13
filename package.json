@@ -1,0 +1,38 @@
+{
+  "name": "@skitterbyte/skittership",
+  "version": "1.0.0",
+  "description": "Changelog + user-facing release-notes tooling for Claude Code — installs the /commit skill, commit-message rule, and release-artifact generators into any project.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "changelog",
+    "release-notes",
+    "conventional-commits",
+    "semver",
+    "scaffold"
+  ],
+  "license": "MIT",
+  "author": "Reuben Greaves",
+  "type": "commonjs",
+  "bin": {
+    "skittership": "bin/skittership.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "prompts": "^2.4.2"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skitterbyte/skittership.git"
+  }
+}
