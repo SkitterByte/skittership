@@ -42,7 +42,7 @@ When a change is **user-visible** (a feature, fix, or improvement an end user
 would notice), add a `Release-Note:` footer. The terse subject feeds the
 dev-facing changelog (`CHANGELOG.md` by default); the footer feeds the
 user-facing release notes (`RELEASES.md` by default) via
-`scripts/generate-releases.js`, run at `npm version`. Both are generated from
+`scripts/generate-releases.cjs`, run at `npm version`. Both are generated from
 the same commit. Filenames, the product name, and the scope→area map are
 configured in `skittership.config.json` (this whole section applies only when
 the release tooling is installed — see the project README).

@@ -8,7 +8,7 @@ const {
   generateChangelogSection,
   upsertSection,
   DEFAULT_HEADER,
-} = require('../assets/scripts/generate-changelog.js')
+} = require('../assets/scripts/generate-changelog.cjs')
 
 const mk = (overrides) => ({
   type: 'feat',

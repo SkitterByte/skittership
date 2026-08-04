@@ -84,10 +84,10 @@ test('copies scripts only for enabled features, with the shared lib', async () =
     mode: 'init',
     release: release({ changelog: true, releases: false }),
   })
-  assert.ok(exists(dir, 'scripts', 'generate-changelog.js'), 'changelog script copied')
-  assert.ok(!exists(dir, 'scripts', 'generate-releases.js'), 'releases script NOT copied')
-  assert.ok(exists(dir, 'scripts', 'lib', 'git-commits.js'), 'shared lib copied')
-  assert.ok(exists(dir, 'scripts', 'lib', 'config.js'), 'config lib copied')
+  assert.ok(exists(dir, 'scripts', 'generate-changelog.cjs'), 'changelog script copied')
+  assert.ok(!exists(dir, 'scripts', 'generate-releases.cjs'), 'releases script NOT copied')
+  assert.ok(exists(dir, 'scripts', 'lib', 'git-commits.cjs'), 'shared lib copied')
+  assert.ok(exists(dir, 'scripts', 'lib', 'config.cjs'), 'config lib copied')
 })
 
 test('copies no scripts when both features are disabled', async () => {
@@ -108,11 +108,11 @@ test('wires the version hook when package.json exists and is opted in', async ()
   await init({ dir, force: false, claudeMd: false, mode: 'init', release: release({ versionHook: true }) })
 
   const scripts = readPkg(dir).scripts
-  assert.match(scripts.version, /generate-changelog\.js/)
-  assert.match(scripts.version, /generate-releases\.js/)
+  assert.match(scripts.version, /generate-changelog\.cjs/)
+  assert.match(scripts.version, /generate-releases\.cjs/)
   assert.match(scripts.version, /git add CHANGELOG\.md RELEASES\.md/)
-  assert.strictEqual(scripts.changelog, 'node scripts/generate-changelog.js')
-  assert.strictEqual(scripts['releases:retro'], 'node scripts/generate-releases.js --retro')
+  assert.strictEqual(scripts.changelog, 'node scripts/generate-changelog.cjs')
+  assert.strictEqual(scripts['releases:retro'], 'node scripts/generate-releases.cjs --retro')
 })
 
 test('skips the version hook when no package.json is present', async () => {
@@ -128,10 +128,10 @@ test('preserves a custom version script without --force, overwrites with it', as
 
   await init({ dir, force: false, claudeMd: false, mode: 'init', release: release({ versionHook: true }) })
   assert.strictEqual(readPkg(dir).scripts.version, 'my-custom', 'custom version kept without --force')
-  assert.strictEqual(readPkg(dir).scripts.changelog, 'node scripts/generate-changelog.js')
+  assert.strictEqual(readPkg(dir).scripts.changelog, 'node scripts/generate-changelog.cjs')
 
   await init({ dir, force: true, claudeMd: false, mode: 'init', release: release({ versionHook: true }) })
-  assert.match(readPkg(dir).scripts.version, /generate-changelog\.js/, '--force overwrote version')
+  assert.match(readPkg(dir).scripts.version, /generate-changelog\.cjs/, '--force overwrote version')
 })
 
 test('update re-syncs scripts without clobbering config', async () => {
@@ -142,7 +142,7 @@ test('update re-syncs scripts without clobbering config', async () => {
   const edited = JSON.parse(fs.readFileSync(cfgPath, 'utf8'))
   edited.releases.productName = 'Renamed'
   fs.writeFileSync(cfgPath, JSON.stringify(edited), 'utf8')
-  const scriptPath = path.join(dir, 'scripts', 'generate-changelog.js')
+  const scriptPath = path.join(dir, 'scripts', 'generate-changelog.cjs')
   fs.writeFileSync(scriptPath, 'EDITED', 'utf8')
 
   await init({ dir, force: true, claudeMd: false, mode: 'update' })
@@ -211,6 +211,79 @@ test('init carries values over from a legacy skitterspec.config.json', async () 
   const cfg = loadConfig(dir)
   assert.strictEqual(cfg.releases.productName, 'Legacy App', 'product name carried over')
   assert.strictEqual(cfg.releases.file, 'NOTES.md', 'releases filename carried over')
+})
+
+// --- managed-script refresh + .cjs migration --------------------------------
+
+test('generators install as .cjs (survive a "type": "module" consumer)', async () => {
+  const dir = tmpProject()
+  await init({ dir, force: false, claudeMd: false, mode: 'init', release: release() })
+
+  assert.ok(exists(dir, 'scripts', 'generate-changelog.cjs'), 'changelog ships as .cjs')
+  assert.ok(exists(dir, 'scripts', 'generate-releases.cjs'), 'releases ships as .cjs')
+  assert.ok(exists(dir, 'scripts', 'lib', 'config.cjs'), 'config lib ships as .cjs')
+  assert.ok(exists(dir, 'scripts', 'lib', 'git-commits.cjs'), 'git-commits lib ships as .cjs')
+})
+
+test('init refreshes stale pre-1.1 .js generators and deletes the old copies', async () => {
+  const dir = tmpProject()
+  // Simulate a project installed before the .cjs switch: hand-written stale .js
+  // generators still on disk (the ones that crash under "type": "module").
+  fs.mkdirSync(path.join(dir, 'scripts', 'lib'), { recursive: true })
+  const stale = path.join(dir, 'scripts', 'generate-changelog.js')
+  fs.writeFileSync(stale, 'STALE', 'utf8')
+  fs.writeFileSync(path.join(dir, 'scripts', 'lib', 'config.js'), 'STALE', 'utf8')
+
+  // No --force: managed generators must still be refreshed/cleaned up.
+  await init({ dir, force: false, claudeMd: false, mode: 'init', release: release() })
+
+  assert.ok(!exists(dir, 'scripts', 'generate-changelog.js'), 'stale .js generator removed')
+  assert.ok(!exists(dir, 'scripts', 'lib', 'config.js'), 'stale .js lib removed')
+  assert.ok(exists(dir, 'scripts', 'generate-changelog.cjs'), '.cjs generator installed')
+  assert.notEqual(
+    fs.readFileSync(path.join(dir, 'scripts', 'generate-changelog.cjs'), 'utf8'),
+    'STALE',
+    'shipped content, not the stale copy',
+  )
+})
+
+test('update --force repairs a legacy ESM project end to end', async () => {
+  const dir = tmpProject()
+  // A skitterspec-era, "type": "module" project: legacy config + .js generators
+  // + a package.json whose hook still names the (ESM-incompatible) .js files.
+  fs.writeFileSync(
+    path.join(dir, LEGACY_CONFIG_FILE),
+    JSON.stringify({ version: 1, releases: { productName: 'Legacy App' } }),
+    'utf8',
+  )
+  fs.mkdirSync(path.join(dir, 'scripts', 'lib'), { recursive: true })
+  fs.writeFileSync(path.join(dir, 'scripts', 'generate-changelog.js'), 'OLD', 'utf8')
+  fs.writeFileSync(
+    path.join(dir, 'package.json'),
+    JSON.stringify({
+      name: 'demo',
+      type: 'module',
+      scripts: {
+        version: 'node scripts/generate-changelog.js && git add CHANGELOG.md',
+        changelog: 'node scripts/generate-changelog.js',
+      },
+    }),
+    'utf8',
+  )
+
+  await init({ dir, force: true, claudeMd: false, mode: 'update' })
+
+  // config carried over, not reset to defaults
+  assert.ok(!exists(dir, LEGACY_CONFIG_FILE), 'legacy config renamed away')
+  assert.strictEqual(loadConfig(dir).releases.productName, 'Legacy App', 'config carried over')
+  // generators swapped to .cjs
+  assert.ok(!exists(dir, 'scripts', 'generate-changelog.js'), 'old .js generator removed')
+  assert.ok(exists(dir, 'scripts', 'generate-changelog.cjs'), '.cjs generator installed')
+  // npm commands now point at .cjs so `npm run changelog` / the hook actually run
+  const scripts = readPkg(dir).scripts
+  assert.strictEqual(scripts.changelog, 'node scripts/generate-changelog.cjs')
+  assert.match(scripts.version, /generate-changelog\.cjs/)
+  assert.doesNotMatch(scripts.version, /generate-changelog\.js(?!on)/, 'no stale .js reference left')
 })
 
 // --- non-interactive flag resolution (drives the no-TTY / --yes path) -------

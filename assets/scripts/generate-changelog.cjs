@@ -4,7 +4,7 @@
 /**
  * Generate a dev-facing CHANGELOG from git commits using conventional commits.
  * Run manually or wired into the versioning process. Sibling to
- * generate-releases.js (user-facing notes from `Release-Note:` footers).
+ * generate-releases.cjs (user-facing notes from `Release-Note:` footers).
  *
  * The output filename is injected (defaults to CHANGELOG.md). skittership's
  * config loader supplies it in production; the pure functions below are
@@ -21,8 +21,8 @@ const {
   getCommitsSinceLastTag,
   getTagDate,
   parseCommit,
-} = require('./lib/git-commits.js')
-const { loadConfig } = require('./lib/config.js')
+} = require('./lib/git-commits.cjs')
+const { loadConfig } = require('./lib/config.cjs')
 
 const DEFAULT_FILE = 'CHANGELOG.md'
 
@@ -248,7 +248,7 @@ function main(argv) {
     const countArg = args[retroIdx + 1]
     const count = Number.parseInt(countArg ?? '', 10)
     if (!Number.isFinite(count) || count <= 0) {
-      console.error('Usage: generate-changelog.js --retro <count>')
+      console.error('Usage: generate-changelog.cjs --retro <count>')
       process.exit(1)
     }
     retroFillChangelog(count, options)

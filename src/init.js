@@ -8,12 +8,25 @@ const { loadConfig, SCHEMA_VERSION } = require('./config.js')
 const ASSETS = path.join(__dirname, '..', 'assets')
 
 // Shipped generator scripts, copied into the consumer's scripts/ when enabled.
+// They ship as .cjs so they stay CommonJS even when the consumer's package.json
+// declares "type": "module" (a bare .js there is parsed as ESM and every
+// require() in the generators throws — see generate-*.cjs).
 const SHARED_LIB = [
+  path.join('scripts', 'lib', 'git-commits.cjs'),
+  path.join('scripts', 'lib', 'config.cjs'),
+]
+const CHANGELOG_SCRIPT = path.join('scripts', 'generate-changelog.cjs')
+const RELEASES_SCRIPT = path.join('scripts', 'generate-releases.cjs')
+
+// Pre-1.1 the same generators shipped as .js. On a re-install we overwrite the
+// managed .cjs copies but must also delete these stale .js siblings, or the old
+// (ESM-incompatible) files linger and the version hook keeps pointing at them.
+const LEGACY_SCRIPTS = [
+  path.join('scripts', 'generate-changelog.js'),
+  path.join('scripts', 'generate-releases.js'),
   path.join('scripts', 'lib', 'git-commits.js'),
   path.join('scripts', 'lib', 'config.js'),
 ]
-const CHANGELOG_SCRIPT = path.join('scripts', 'generate-changelog.js')
-const RELEASES_SCRIPT = path.join('scripts', 'generate-releases.js')
 const CONFIG_FILE = 'skittership.config.json'
 // The name skitterspec used to write when release tooling was bundled there.
 // init migrates it (rename) so an existing setup carries over cleanly.
@@ -170,16 +183,35 @@ function writeConfig(dir, release) {
   report[exists ? 'updated' : 'created'].push(CONFIG_FILE)
 }
 
-function installScripts(dir, release, opts) {
+// The generator scripts are skittership-managed, not user-authored: always
+// refresh them to the shipped content (writeFile no-ops when identical) rather
+// than skip-if-exists. Skipping left stale copies behind on migrated projects —
+// e.g. an old lib/config.js still resolving skitterspec.config.json — and would
+// strand pre-1.1 .js copies next to the new .cjs ones. `force: true` here is
+// safe because these files carry no user edits worth preserving.
+function installScripts(dir, release, _opts) {
   if (!release.changelog.enabled && !release.releases.enabled) return
+  removeLegacyScripts(dir)
+  const managed = { force: true }
   for (const lib of SHARED_LIB) {
-    copyAsset(dir, lib, path.join(dir, lib), opts)
+    copyAsset(dir, lib, path.join(dir, lib), managed)
   }
   if (release.changelog.enabled) {
-    copyAsset(dir, CHANGELOG_SCRIPT, path.join(dir, CHANGELOG_SCRIPT), opts)
+    copyAsset(dir, CHANGELOG_SCRIPT, path.join(dir, CHANGELOG_SCRIPT), managed)
   }
   if (release.releases.enabled) {
-    copyAsset(dir, RELEASES_SCRIPT, path.join(dir, RELEASES_SCRIPT), opts)
+    copyAsset(dir, RELEASES_SCRIPT, path.join(dir, RELEASES_SCRIPT), managed)
+  }
+}
+
+// Delete pre-1.1 .js generator copies superseded by the .cjs ones.
+function removeLegacyScripts(dir) {
+  for (const legacy of LEGACY_SCRIPTS) {
+    const abs = path.join(dir, legacy)
+    if (fs.existsSync(abs)) {
+      fs.rmSync(abs)
+      report.removed.push(rel(dir, abs))
+    }
   }
 }
 
@@ -203,11 +235,11 @@ function wireVersionHook(dir, release, { force }) {
   const genCmds = []
   const addFiles = []
   if (release.changelog.enabled) {
-    genCmds.push('node scripts/generate-changelog.js')
+    genCmds.push('node scripts/generate-changelog.cjs')
     addFiles.push(release.changelog.file)
   }
   if (release.releases.enabled) {
-    genCmds.push('node scripts/generate-releases.js')
+    genCmds.push('node scripts/generate-releases.cjs')
     addFiles.push(release.releases.file)
   }
   if (genCmds.length === 0) return
@@ -228,12 +260,12 @@ function wireVersionHook(dir, release, { force }) {
 
   const helpers = {}
   if (release.changelog.enabled) {
-    helpers.changelog = 'node scripts/generate-changelog.js'
-    helpers['changelog:retro'] = 'node scripts/generate-changelog.js --retro'
+    helpers.changelog = 'node scripts/generate-changelog.cjs'
+    helpers['changelog:retro'] = 'node scripts/generate-changelog.cjs --retro'
   }
   if (release.releases.enabled) {
-    helpers.releases = 'node scripts/generate-releases.js'
-    helpers['releases:retro'] = 'node scripts/generate-releases.js --retro'
+    helpers.releases = 'node scripts/generate-releases.cjs'
+    helpers['releases:retro'] = 'node scripts/generate-releases.cjs --retro'
   }
   for (const [name, cmd] of Object.entries(helpers)) {
     if (pkg.scripts[name] && pkg.scripts[name] !== cmd && !force) continue
@@ -285,7 +317,9 @@ async function init({ dir, force, claudeMd, mode, release }) {
 
   // Migrate a legacy config first so both direct callers and the CLI resolve
   // release settings from the carried-over file (idempotent — CLI runs it too).
-  const migration = mode !== 'update' ? migrateLegacyConfig(dir) : { migrated: false }
+  // Runs in `update` too, so `update --force` on a skitterspec-era repo carries
+  // its config over instead of resetting the loader to defaults.
+  const migration = migrateLegacyConfig(dir)
 
   installSkills(dir, { force })
   installRule(dir, { force })
@@ -296,7 +330,11 @@ async function init({ dir, force, claudeMd, mode, release }) {
   const rel = release || releaseFromConfig(loadConfig(dir))
   if (mode !== 'update') writeConfig(dir, rel)
   installScripts(dir, rel, { force })
-  if (mode !== 'update' && rel.versionHook) wireVersionHook(dir, rel, { force })
+  // Wire in both modes: `update --force` must rewrite the npm command strings so
+  // they point at the refreshed .cjs generators (a pre-1.1 project's hook still
+  // names the now-deleted .js files). In `init` this keeps a custom `version`
+  // script unless --force; `update` always passes force.
+  if (rel.versionHook) wireVersionHook(dir, rel, { force })
 
   printReport(dir, mode, migration)
 }

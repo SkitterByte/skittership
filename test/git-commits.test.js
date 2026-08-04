@@ -3,7 +3,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert')
 
-const { parseCommit, reconstructCommits } = require('../assets/scripts/lib/git-commits.js')
+const { parseCommit, reconstructCommits } = require('../assets/scripts/lib/git-commits.cjs')
 
 // commitLine is the `hash\0subject\0body` form reconstructCommits produces.
 const line = (hash, subject, body = '') => `${hash}\0${subject}\0${body}`

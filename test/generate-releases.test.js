@@ -14,7 +14,7 @@ const {
   renderReleasesSection,
   resolveArea,
   upsertReleasesSection,
-} = require('../assets/scripts/generate-releases.js')
+} = require('../assets/scripts/generate-releases.cjs')
 const { loadConfig, CONFIG_FILE } = require('../src/config.js')
 
 // A representative scope→area map (the production map is injected from config).

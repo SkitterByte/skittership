@@ -3,8 +3,8 @@
 
 /**
  * Generate user-facing release notes from `Release-Note:` commit footers.
- * Sibling to generate-changelog.js (which builds the dev-facing CHANGELOG from
- * commit subjects). Both walk the same tag ranges via lib/git-commits.js.
+ * Sibling to generate-changelog.cjs (which builds the dev-facing CHANGELOG from
+ * commit subjects). Both walk the same tag ranges via lib/git-commits.cjs.
  *
  * Opt-in: ONLY commits carrying a `Release-Note:` footer appear here. The dev
  * subject stays terse; the footer carries the user-facing sentence.
@@ -37,8 +37,8 @@ const {
   getCommitsSinceLastTag,
   getTagDate,
   parseCommit,
-} = require('./lib/git-commits.js')
-const { loadConfig } = require('./lib/config.js')
+} = require('./lib/git-commits.cjs')
+const { loadConfig } = require('./lib/config.cjs')
 
 // Buckets render in this order within each area.
 const BUCKET_ORDER = ['Action required', 'New', 'Improved', 'Fixed']
@@ -332,7 +332,7 @@ function main(argv) {
   if (retroIdx >= 0) {
     const count = Number.parseInt(args[retroIdx + 1] ?? '', 10)
     if (!Number.isFinite(count) || count <= 0) {
-      console.error('Usage: generate-releases.js --retro <count>')
+      console.error('Usage: generate-releases.cjs --retro <count>')
       process.exit(1)
     }
     retroFillReleases(count, options)

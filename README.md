@@ -13,8 +13,8 @@ you can adopt release tooling without the spec workflow (and vice versa).
 |------|------|
 | `.claude/skills/commit/SKILL.md` | The `/commit` skill — stages task-related files, runs typecheck + tests, writes a Conventional Commit |
 | `.claude/rules/commit-messages.md` | Commit grammar: `type(scope): subject`, and the `Release-Note:` footer rules |
-| `scripts/generate-changelog.js` | Regenerates the dev-facing `CHANGELOG.md` from commit subjects |
-| `scripts/generate-releases.js` | Regenerates the user-facing `RELEASES.md` from `Release-Note:` footers |
+| `scripts/generate-changelog.cjs` | Regenerates the dev-facing `CHANGELOG.md` from commit subjects |
+| `scripts/generate-releases.cjs` | Regenerates the user-facing `RELEASES.md` from `Release-Note:` footers |
 | `scripts/lib/` | Shared, zero-dependency git/config helpers |
 | `skittership.config.json` | Filenames, product name, scope→area map, feature toggles |
 | `package.json` `version` hook | Regenerates both artifacts at `npm version` (opt-in) |

@@ -3,8 +3,8 @@
 /**
  * Shared git-history plumbing for the release artifact generators.
  *
- * Both `generate-changelog.js` (dev-facing CHANGELOG, from commit subjects) and
- * `generate-releases.js` (user-facing RELEASES, from `Release-Note:` footers)
+ * Both `generate-changelog.cjs` (dev-facing CHANGELOG, from commit subjects) and
+ * `generate-releases.cjs` (user-facing RELEASES, from `Release-Note:` footers)
  * walk the same tag ranges and parse the same conventional-commit format. This
  * module is the single source of that logic so the two generators cannot drift.
  *
