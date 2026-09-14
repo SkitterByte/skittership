@@ -24,11 +24,26 @@ const path = require('node:path')
 
 const { loadConfig } = require(path.join(__dirname, 'lib', 'config.cjs'))
 
+// Lockfiles a package manager updates and stages for itself during a version
+// bump. Listing only npm's meant a pnpm or yarn project had its own lockfile
+// reported as a stray, so the guard aborted every release on those projects —
+// the one file that is guaranteed to be staged is not evidence of a concurrent
+// session. Kept broad on purpose: a lockfile here is always the release's own.
+const LOCKFILES = [
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+  'bun.lockb',
+  'bun.lock',
+]
+
 // Files the release itself is expected to stage. package.json (and its
-// lockfiles) are npm's own — it bumps the version and stages them around us.
+// lockfiles) are the package manager's own — it bumps the version and stages
+// them around us.
 function expectedPaths(dir) {
   const config = loadConfig(dir)
-  const expected = new Set(['package.json', 'package-lock.json', 'npm-shrinkwrap.json'])
+  const expected = new Set(['package.json', ...LOCKFILES])
   if (config.changelog.enabled) expected.add(config.changelog.file)
   if (config.releases.enabled) expected.add(config.releases.file)
   return expected
@@ -66,4 +81,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { expectedPaths, stagedPaths, findStrays }
+module.exports = { expectedPaths, stagedPaths, findStrays, LOCKFILES }

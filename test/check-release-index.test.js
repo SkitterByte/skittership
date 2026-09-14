@@ -14,7 +14,7 @@ const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
 const GUARD = path.join(__dirname, '..', 'assets', 'scripts', 'check-release-index.cjs')
-const { findStrays, expectedPaths } = require(GUARD)
+const { findStrays, expectedPaths, LOCKFILES } = require(GUARD)
 
 function tmpRepo() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skittership-idx-'))
@@ -29,12 +29,41 @@ function tmpRepo() {
   return { dir, git }
 }
 
-test('expected set covers the generated files and npm own files', () => {
+test('expected set covers the generated files and the package manager own files', () => {
   const { dir } = tmpRepo()
   const expected = expectedPaths(dir)
   for (const p of ['package.json', 'package-lock.json', 'CHANGELOG.md', 'RELEASES.md']) {
     assert.ok(expected.has(p), `${p} is expected`)
   }
+})
+
+// Only npm's lockfiles were listed, so `pnpm version` in a pnpm project staged
+// pnpm-lock.yaml, the guard called it a stray, and the release aborted — every
+// time, for every non-npm project. The lockfile is the one file guaranteed to
+// be staged by the release itself.
+test('every package manager lockfile is expected, not a stray', () => {
+  const { dir } = tmpRepo()
+  const expected = expectedPaths(dir)
+  for (const lock of ['pnpm-lock.yaml', 'yarn.lock', 'bun.lockb', 'bun.lock']) {
+    assert.ok(expected.has(lock), `${lock} is expected`)
+  }
+  assert.ok(LOCKFILES.includes('package-lock.json'), 'npm lockfile still covered')
+})
+
+test('a pnpm release with only its lockfile staged has no strays', () => {
+  const { dir, git } = tmpRepo()
+  fs.writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
+  fs.writeFileSync(path.join(dir, 'CHANGELOG.md'), '# Changelog\n')
+  git('add', '--', 'pnpm-lock.yaml', 'CHANGELOG.md')
+  assert.deepStrictEqual(findStrays(dir), [])
+})
+
+test('a lockfile does not smuggle an unrelated file past the guard', () => {
+  const { dir, git } = tmpRepo()
+  fs.writeFileSync(path.join(dir, 'pnpm-lock.yaml'), 'lockfileVersion: 9\n')
+  fs.writeFileSync(path.join(dir, 'tracked.txt'), 'changed by another session\n')
+  git('add', '--', 'pnpm-lock.yaml', 'tracked.txt')
+  assert.deepStrictEqual(findStrays(dir), ['tracked.txt'])
 })
 
 test('no strays when only the release files are staged', () => {
