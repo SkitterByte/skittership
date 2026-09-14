@@ -52,17 +52,19 @@ you point it at. Without that config, none of this appears.
 
 ## Releasing this package
 
-Releases are cut locally and published by CI. The whole flow is one command:
+This repo uses **pnpm** (`pnpm-lock.yaml`, pinned via `packageManager`). Install
+with `pnpm install`; the release itself is cut locally and staged by CI:
 
 ```
-npm version <patch|minor|major>
+pnpm version <patch|minor|major>
 ```
 
 That runs, in order: the `version` hook (regenerates `CHANGELOG.md` +
 `RELEASES.md` from `Release-Note:` footers, stages them, and aborts via
 `scripts/check-release-index.cjs` if anything unexpected is staged), npm's own
 version commit + `vX.Y.Z` tag, then `postversion` pushes both with
-`git push --follow-tags`.
+`git push --follow-tags`. (`pnpm version` runs the same lifecycle hooks as
+`npm version` and commits what they stage — verified, not assumed.)
 
 Pushing the tag triggers `.github/workflows/publish.yml`, which verifies the tag
 matches `package.json`, runs the tests, and **stages** the release.
@@ -74,18 +76,18 @@ nobody approves simply never ships, silently — so the second step is not
 optional:
 
 ```
-npm run approve                 # approve the version in package.json
-npm run approve 2.0.1           # approve a specific version
-npm run approve <stage-id>      # approve a specific staged build
-npm run approve -- --reject     # discard it instead
-npm run staged                  # just list what is waiting
+pnpm approve                    # approve the version in package.json
+pnpm approve 2.0.1              # approve a specific version
+pnpm approve <stage-id>         # approve a specific staged build
+pnpm approve -- --reject        # discard it instead
+pnpm staged                     # just list what is waiting
 ```
 
 You need to be logged in first (`npm login`), and on npm >= 11.15.0 — older
 npm has no `stage` command at all.
 
 `npm stage approve|reject|view|download` all take a **stage-id** (a UUID), not a
-package spec; only `npm stage list` accepts a spec. `npm run approve` exists to
+package spec; only `npm stage list` accepts a spec. `pnpm approve` exists to
 bridge that: it looks the version up in the listing, resolves it to its
 stage-id, and approves that. Pass a bare UUID and it is used directly. If the
 version is not staged, it prints what is, rather than failing obscurely.
@@ -93,6 +95,13 @@ version is not staged, it prints what is, rather than failing obscurely.
 The prompt is interactive by design — it is the 2FA gate, so it cannot be
 automated, and that is the point. Approval also works from the package page on
 npmjs.com.
+
+**Why the registry commands are npm, not pnpm.** Dependencies, scripts and CI
+all use pnpm, but anything talking to the registry (`npm stage publish` in CI,
+`npm stage …` under `pnpm approve`) stays on npm. That path is proven end to
+end, npm ships with Node so it costs nothing, and pnpm's own `stage publish`
+has not been verified against our trusted publisher. Worth revisiting once a
+release has gone out this way.
 
 Confirm it landed with `npm view @skitterbyte/skittership dist-tags`.
 

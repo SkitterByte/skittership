@@ -143,8 +143,9 @@ to "honour project conventions". Here they are for this project:
 - **Typecheck command:** none — this is plain CommonJS JavaScript with no
   TypeScript and no build step. Skip the typecheck step entirely; do not
   substitute another command for it.
-- **Test command:** `npm test` (i.e. `node --test`). Single file:
-  `node --test test/<name>.test.js`.
+- **Test command:** `pnpm test` (i.e. `node --test`). Single file:
+  `node --test test/<name>.test.js`. This repo uses pnpm — install with
+  `pnpm install`, never `npm install` (there is no `package-lock.json`).
 - **Lint/format:** none — no linter or formatter is configured. Match the
   surrounding style by hand.
 - **Other rules specs must honour:**

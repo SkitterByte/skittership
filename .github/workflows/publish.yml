@@ -28,11 +28,21 @@ jobs:
       # npm then treats the registry as token-authenticated, never performs the
       # OIDC exchange, and the registry rejects the anonymous PUT as a 404.
       # Trusted Publishing needs npm to find NO credentials at all.
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
+          cache: pnpm
 
+      - run: pnpm install --frozen-lockfile
+
+      # Dependencies are installed with pnpm (this repo's package manager), but
+      # the registry step stays on npm: that path is proven end to end, npm
+      # ships with Node so it costs nothing, and pnpm's own `stage publish` has
+      # not been verified against our trusted publisher. Revisit once a pnpm
+      # release has been seen to work.
+      #
       # Staged publishing needs npm >= 11.15.0 (trusted publishing alone needs
       # only 11.5.1); Node 22 still bundles npm 10.x. node-version '22' resolves
       # to the latest 22.x, comfortably above the required 22.14.0.
@@ -52,8 +62,6 @@ jobs:
               echo "--- $f: absent (expected) ---"
             fi
           done
-
-      - run: npm ci
 
       # A tag that disagrees with package.json means the version commit and the
       # tag came apart. Publishing that ships a package whose version is not the
