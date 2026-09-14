@@ -22,15 +22,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Deliberately NO registry-url. Passing it makes setup-node write an
+      # .npmrc containing `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}`,
+      # and with no token in the environment that resolves to an empty token.
+      # npm then treats the registry as token-authenticated, never performs the
+      # OIDC exchange, and the registry rejects the anonymous PUT as a 404.
+      # Trusted Publishing needs npm to find NO credentials at all.
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
           cache: npm
 
       # Trusted Publishing needs npm >= 11.5.1; Node 22 still bundles npm 10.x.
       - name: Upgrade npm
         run: npm install -g npm@latest
+
+      # Surfaced so a future auth failure is diagnosable from the log alone:
+      # the npm version actually in use, and proof no credentials are present.
+      - name: Report publish environment
+        run: |
+          echo "npm: $(npm --version)  (Trusted Publishing needs >= 11.5.1)"
+          for f in .npmrc "$HOME/.npmrc"; do
+            if [ -f "$f" ]; then
+              echo "--- $f ---"
+              sed -E 's/(_authToken=).*/\1<redacted>/' "$f"
+            else
+              echo "--- $f: absent (expected) ---"
+            fi
+          done
 
       - run: npm ci
 
