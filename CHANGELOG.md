@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **releases**: runnable --retro, guarded version commit
 - **commit**: bound commits to an explicit pathspec
-- ship generators as .cjs and refresh managed scripts on install
 
-## [1.1.0] - 2026-09-14
+## [1.1.0] - 2026-08-04
 
 ### Fixed
-- **commit**: bound commits to an explicit pathspec
 - ship generators as .cjs and refresh managed scripts on install
+
+## [1.0.0] - 2026-07-13
+
+### Added
+- scaffold skittership release installer

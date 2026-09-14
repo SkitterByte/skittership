@@ -254,7 +254,41 @@ function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+/**
+ * Compare two dotted version strings numerically: >0 when `a` is newer.
+ *
+ * Deliberately not a full semver implementation — this project's tags are
+ * plain `major.minor.patch`, and the only job here is keeping generated
+ * sections in descending order. Pre-release suffixes are not handled.
+ */
+function compareVersions(a, b) {
+  const pa = String(a).split('.').map((n) => Number.parseInt(n, 10) || 0)
+  const pb = String(b).split('.').map((n) => Number.parseInt(n, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const diff = (pa[i] || 0) - (pb[i] || 0)
+    if (diff !== 0) return diff
+  }
+  return 0
+}
+
+/**
+ * Index of the `\n` preceding the first section OLDER than `version`, or -1
+ * when every existing section is newer (i.e. this one belongs at the end).
+ *
+ * `headingRegex` must capture the version as group 1.
+ */
+function indexOfOlderSection(content, version, headingRegex) {
+  const re = new RegExp(headingRegex.source, 'g')
+  let match
+  while ((match = re.exec(content)) !== null) {
+    if (compareVersions(match[1], version) < 0) return match.index
+  }
+  return -1
+}
+
 module.exports = {
+  compareVersions,
+  indexOfOlderSection,
   getCommitsSinceLastTag,
   reconstructCommits,
   parseCommit,

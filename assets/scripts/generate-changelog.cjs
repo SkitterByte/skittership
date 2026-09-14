@@ -20,6 +20,7 @@ const {
   getCommitsBetween,
   getCommitsSinceLastTag,
   getTagDate,
+  indexOfOlderSection,
   parseCommit,
 } = require('./lib/git-commits.cjs')
 const { loadConfig } = require('./lib/config.cjs')
@@ -141,14 +142,30 @@ function upsertSection(changelogContent, newSection, version) {
     return `${before}\n\n${newSection}\n${after ? `${after}\n` : ''}`
   }
 
-  const firstVersionIdx = changelogContent.search(/\n## \[/)
-  if (firstVersionIdx >= 0) {
-    const before = changelogContent.slice(0, firstVersionIdx).replace(/\s+$/, '')
-    const after = changelogContent.slice(firstVersionIdx + 1)
+  // Insert above the first section OLDER than this one, so sections stay in
+  // descending version order regardless of the order they are written in.
+  // Retro-fill walks oldest-first, so "insert above whatever is currently
+  // first" would leave the oldest release on top.
+  const olderIdx = indexOfOlderSection(changelogContent, version, /\n## \[(\d[\d.]*)\]/)
+  if (olderIdx >= 0) {
+    const before = changelogContent.slice(0, olderIdx).replace(/\s+$/, '')
+    const after = changelogContent.slice(olderIdx + 1)
     return `${before}\n\n${newSection}\n${after}`
   }
 
   return `${changelogContent.replace(/\s+$/, '')}\n\n${newSection}`
+}
+
+/** Remove a version's section entirely, if present. */
+function removeSection(changelogContent, version) {
+  const regex = new RegExp(
+    `(^|\\n)## \\[${escapeRegex(version)}\\][^\\n]*\\n[\\s\\S]*?(?=\\n## \\[|\\n---|$)`,
+  )
+  if (!regex.test(changelogContent)) return { content: changelogContent, removed: false }
+  return {
+    content: changelogContent.replace(regex, '').replace(/\n{3,}/g, '\n\n'),
+    removed: true,
+  }
 }
 
 function readChangelog(path) {
@@ -207,7 +224,17 @@ function retroFillChangelog(count, options = {}) {
       .filter((c) => c !== null)
 
     if (commits.length === 0) {
-      console.log(`⚠️  ${tag}: no conventional commits — skipping`)
+      // No commits for this tag. Skipping would leave behind any section
+      // written by an earlier run whose commit range was wrong (e.g. before
+      // the tag existed), so drop it and let the file tell the truth.
+      const pruned = removeSection(changelogContent, version)
+      if (pruned.removed) {
+        changelogContent = pruned.content
+        updated += 1
+        console.log(`🧹 ${tag}: no conventional commits — removed stale section`)
+      } else {
+        console.log(`⚠️  ${tag}: no conventional commits — skipping`)
+      }
       continue
     }
 
@@ -271,6 +298,7 @@ module.exports = {
   upsertSection,
   updateChangelog,
   retroFillChangelog,
+  removeSection,
   DEFAULT_HEADER,
 }
 
