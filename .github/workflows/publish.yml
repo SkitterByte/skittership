@@ -67,9 +67,5 @@ jobs:
           fi
           echo "tag and package.json agree on $pkg"
 
-      # Also runs via prepublishOnly, but as its own step a test failure reads
-      # as a failed test rather than a failed publish.
-      - run: npm test
-
       # npm generates provenance automatically under Trusted Publishing.
       - run: npm publish
