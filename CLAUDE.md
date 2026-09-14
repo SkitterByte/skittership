@@ -65,9 +65,31 @@ version commit + `vX.Y.Z` tag, then `postversion` pushes both with
 `git push --follow-tags`.
 
 Pushing the tag triggers `.github/workflows/publish.yml`, which verifies the tag
-matches `package.json`, runs the tests, and publishes.
+matches `package.json`, runs the tests, and **stages** the release.
+
+**A staged release is not live.** This package uses npm staged publishing: the
+trusted publisher is stage-only, so CI can put a build in the staging area
+without a 2FA prompt, but it stays there until a human approves it. A release
+nobody approves simply never ships, silently — so the second step is not
+optional:
+
+```
+npm stage list                       # what is waiting
+npm stage view @skitterbyte/skittership@<version>
+npm stage approve @skitterbyte/skittership@<version>   # prompts for 2FA — goes live
+npm stage reject  @skitterbyte/skittership@<version>   # discard instead
+```
+
+`npm stage download` fetches the tarball first if you want to inspect what CI
+built. Approval also works from the package page on npmjs.com. These commands
+are interactive by design — they are the 2FA gate, so they cannot be automated,
+and that is the point.
+
+Confirm it landed with `npm view @skitterbyte/skittership dist-tags`.
 
 **Do not run `npm publish` by hand.** The npm account requires two-factor auth
 on writes, so a local publish prompts for an OTP; CI instead authenticates by
 OIDC (npm Trusted Publishing), which needs no token and no OTP. Publishing
-locally would also skip the tag/version check and lose build provenance.
+locally would also skip the tag/version check and lose build provenance. Plain
+`npm publish` from CI is rejected outright — the trusted publisher only permits
+`npm stage publish`.

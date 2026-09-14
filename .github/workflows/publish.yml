@@ -33,7 +33,9 @@ jobs:
           node-version: '22'
           cache: npm
 
-      # Trusted Publishing needs npm >= 11.5.1; Node 22 still bundles npm 10.x.
+      # Staged publishing needs npm >= 11.15.0 (trusted publishing alone needs
+      # only 11.5.1); Node 22 still bundles npm 10.x. node-version '22' resolves
+      # to the latest 22.x, comfortably above the required 22.14.0.
       - name: Upgrade npm
         run: npm install -g npm@latest
 
@@ -41,7 +43,7 @@ jobs:
       # the npm version actually in use, and proof no credentials are present.
       - name: Report publish environment
         run: |
-          echo "npm: $(npm --version)  (Trusted Publishing needs >= 11.5.1)"
+          echo "npm: $(npm --version)  (staged publishing needs >= 11.15.0)"
           for f in .npmrc "$HOME/.npmrc"; do
             if [ -f "$f" ]; then
               echo "--- $f ---"
@@ -68,4 +70,13 @@ jobs:
           echo "tag and package.json agree on $pkg"
 
       # npm generates provenance automatically under Trusted Publishing.
-      - run: npm publish
+      # Not redundant with prepublishOnly: it is undocumented whether that
+      # hook fires for `npm stage publish`, and an unverified build must not
+      # reach the staging area. The suite runs in under a second.
+      - run: npm test
+
+      # Stage rather than publish. The trusted publisher is stage-only, so the
+      # build waits in the staging area until a maintainer approves it with 2FA
+      # (`npm stage approve`, or on npmjs.com). See CLAUDE.md, "Releasing this
+      # package" — a staged release is NOT live until approved.
+      - run: npm stage publish
