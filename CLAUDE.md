@@ -74,16 +74,21 @@ nobody approves simply never ships, silently — so the second step is not
 optional:
 
 ```
-npm stage list                       # what is waiting
-npm stage view @skitterbyte/skittership@<version>
-npm stage approve @skitterbyte/skittership@<version>   # prompts for 2FA — goes live
-npm stage reject  @skitterbyte/skittership@<version>   # discard instead
+npm run approve                 # approve the version in package.json
+npm run approve -- 2.0.1        # approve a specific version
+npm run approve -- --reject     # discard it instead
+npm run staged                  # just list what is waiting
 ```
 
-`npm stage download` fetches the tarball first if you want to inspect what CI
-built. Approval also works from the package page on npmjs.com. These commands
-are interactive by design — they are the 2FA gate, so they cannot be automated,
-and that is the point.
+`npm run approve` wraps `npm stage approve`, filling in the package name and
+defaulting to the version in `package.json` — which is almost always the one you
+just cut. It lists what is staged first, and warns if there is no matching local
+tag, to catch a typo'd version before you approve the wrong thing.
+
+Underneath it is plain `npm stage approve <pkg>@<version>`; `npm stage view` and
+`npm stage download` inspect a build first, and approval also works from the
+package page on npmjs.com. The prompt is interactive by design — it is the 2FA
+gate, so it cannot be automated, and that is the point.
 
 Confirm it landed with `npm view @skitterbyte/skittership dist-tags`.
 

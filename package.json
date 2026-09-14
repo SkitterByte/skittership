@@ -39,7 +39,9 @@
     "changelog": "node scripts/generate-changelog.cjs",
     "changelog:retro": "node scripts/generate-changelog.cjs --retro",
     "releases": "node scripts/generate-releases.cjs",
-    "releases:retro": "node scripts/generate-releases.cjs --retro"
+    "releases:retro": "node scripts/generate-releases.cjs --retro",
+    "approve": "node scripts/approve-release.cjs",
+    "staged": "npm stage list"
   },
   "repository": {
     "type": "git",
