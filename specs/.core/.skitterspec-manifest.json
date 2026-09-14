@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "files": {
+    ".claude/commands/spec-connect.md": "7499be782217137755d409081f0e17294d09437d",
+    ".claude/commands/spec-live.md": "31043baf1af4b65132af0bb99db0d927987f184e",
+    ".claude/rules/negative-checks.md": "cd931d33e8e7ece8109ab0e8a46c748165daf19b",
+    ".claude/rules/spec-planning.md": "a63f43b7757af5a35f466ac59f6517da277bbf50",
+    ".claude/skills/spec-bug/SKILL.md": "4cbf6e453f9ad5457e4e74e78f00ad80ebe5e2c3",
+    ".claude/skills/spec-cancel/SKILL.md": "0db316a1939cc521689631e40fa4d9441433322d",
+    ".claude/skills/spec-complete/SKILL.md": "6ee57aaea953c31b0c39280b31569a054fe3efad",
+    ".claude/skills/spec-hotfix/SKILL.md": "539b51dabd020c457f9a91a87aae69c8c6b7578c",
+    ".claude/skills/spec-init/SKILL.md": "543bbf2025d9d8d4422022f0b0f69745694b4d3a",
+    ".claude/skills/spec-next/SKILL.md": "cf8dc398c6eaa7477d3ba92d1b2370123874fde1",
+    ".claude/skills/spec-review/SKILL.md": "165d651e50bf8845e17dc1b91239c2be7fda89c6",
+    ".claude/skills/spec-start/SKILL.md": "d07302319c7b66ca4f52719f9ee0a1e18f77bedc",
+    ".claude/skills/spec-to-main/SKILL.md": "eaaaa47e48cbd704e60f6427355b2af005414d58",
+    ".claude/skills/spec/SKILL.md": "98670b7613370cefb764e150b78c21290a4a9981",
+    "specs/.core/env.config.json.example": "fa8c22721c84c8876ae6d180e74c1e382f58bba0",
+    "specs/.core/env.config.md": "294647aacb5bec30810f8d285eca92098e11fc61",
+    "specs/.core/gating.config.json.example": "563b05b61027afed4ce9492607cb5305f5f9f790",
+    "specs/.core/gating.config.md": "c4acaf7678c21fd2b073f6e8cf4ee7a166a49b95"
+  }
+}
