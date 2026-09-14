@@ -45,7 +45,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/skitterbyte/skittership.git"
+    "url": "git+https://github.com/SkitterByte/skittership.git"
   },
   "devDependencies": {
     "@skitterbyte/skitterspec": "^18.0.0"
