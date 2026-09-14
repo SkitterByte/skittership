@@ -5,6 +5,11 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.0.1 — 14 Sep 2026
+
+### Release tooling
+- **Fixed** — Backfilling past releases now keeps them in version order and clears out entries left behind by an earlier run, so a regenerated changelog or release-notes file no longer lists releases out of order or files a note under a version it did not ship in.
+
 ## 2.0.0 — 14 Sep 2026
 
 ### Commit skill
