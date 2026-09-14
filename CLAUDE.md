@@ -49,3 +49,25 @@ question is **on the record**: a missing line is an oversight, a reason is a
 decision. Skitterspec never reads your flag system — it asks and cites the doc
 you point it at. Without that config, none of this appears.
 <!-- skitterspec:end -->
+
+## Releasing this package
+
+Releases are cut locally and published by CI. The whole flow is one command:
+
+```
+npm version <patch|minor|major>
+```
+
+That runs, in order: the `version` hook (regenerates `CHANGELOG.md` +
+`RELEASES.md` from `Release-Note:` footers, stages them, and aborts via
+`scripts/check-release-index.cjs` if anything unexpected is staged), npm's own
+version commit + `vX.Y.Z` tag, then `postversion` pushes both with
+`git push --follow-tags`.
+
+Pushing the tag triggers `.github/workflows/publish.yml`, which verifies the tag
+matches `package.json`, runs the tests, and publishes.
+
+**Do not run `npm publish` by hand.** The npm account requires two-factor auth
+on writes, so a local publish prompts for an OTP; CI instead authenticates by
+OIDC (npm Trusted Publishing), which needs no token and no OTP. Publishing
+locally would also skip the tag/version check and lose build provenance.

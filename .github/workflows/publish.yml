@@ -1,0 +1,56 @@
+name: publish
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+# id-token: write is what lets npm authenticate this workflow via OIDC
+# (Trusted Publishing). No NPM_TOKEN secret is involved, so the account's
+# two-factor requirement on writes does not apply to this job.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+
+      # Trusted Publishing needs npm >= 11.5.1; Node 22 still bundles npm 10.x.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
+      - run: npm ci
+
+      # A tag that disagrees with package.json means the version commit and the
+      # tag came apart. Publishing that ships a package whose version is not the
+      # one that was reviewed, so stop before the registry sees it.
+      - name: Verify tag matches package.json version
+        if: github.event_name == 'push'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match package.json version $pkg"
+            exit 1
+          fi
+          echo "tag and package.json agree on $pkg"
+
+      # Also runs via prepublishOnly, but as its own step a test failure reads
+      # as a failed test rather than a failed publish.
+      - run: npm test
+
+      # npm generates provenance automatically under Trusted Publishing.
+      - run: npm publish
