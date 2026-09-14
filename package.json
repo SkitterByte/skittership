@@ -30,7 +30,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "version": "node scripts/generate-changelog.cjs && node scripts/generate-releases.cjs && git add CHANGELOG.md RELEASES.md",
+    "version": "node scripts/generate-changelog.cjs && node scripts/generate-releases.cjs && git add CHANGELOG.md RELEASES.md && node scripts/check-release-index.cjs",
     "changelog": "node scripts/generate-changelog.cjs",
     "changelog:retro": "node scripts/generate-changelog.cjs --retro",
     "releases": "node scripts/generate-releases.cjs",

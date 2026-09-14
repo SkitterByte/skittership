@@ -111,8 +111,17 @@ test('wires the version hook when package.json exists and is opted in', async ()
   assert.match(scripts.version, /generate-changelog\.cjs/)
   assert.match(scripts.version, /generate-releases\.cjs/)
   assert.match(scripts.version, /git add CHANGELOG\.md RELEASES\.md/)
+  // The guard runs last: npm's commit has no pathspec, so the run must abort
+  // before it if anything else got staged while the generators ran.
+  assert.match(scripts.version, /&& node scripts\/check-release-index\.cjs$/)
   assert.strictEqual(scripts.changelog, 'node scripts/generate-changelog.cjs')
   assert.strictEqual(scripts['releases:retro'], 'node scripts/generate-releases.cjs --retro')
+})
+
+test('installs the release-index guard alongside the generators', async () => {
+  const dir = tmpProject()
+  await init({ dir, force: false, claudeMd: false, mode: 'init', release: release() })
+  assert.ok(exists(dir, 'scripts', 'check-release-index.cjs'), 'guard installed')
 })
 
 test('skips the version hook when no package.json is present', async () => {

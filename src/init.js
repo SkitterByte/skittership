@@ -17,6 +17,10 @@ const SHARED_LIB = [
 ]
 const CHANGELOG_SCRIPT = path.join('scripts', 'generate-changelog.cjs')
 const RELEASES_SCRIPT = path.join('scripts', 'generate-releases.cjs')
+// Guards the `npm version` run: npm commits the whole index with no pathspec,
+// so anything staged while the generators run would ride along. Installed
+// whenever either generator is.
+const INDEX_GUARD_SCRIPT = path.join('scripts', 'check-release-index.cjs')
 
 // Pre-1.1 the same generators shipped as .js. On a re-install we overwrite the
 // managed .cjs copies but must also delete these stale .js siblings, or the old
@@ -202,6 +206,7 @@ function installScripts(dir, release, _opts) {
   if (release.releases.enabled) {
     copyAsset(dir, RELEASES_SCRIPT, path.join(dir, RELEASES_SCRIPT), managed)
   }
+  copyAsset(dir, INDEX_GUARD_SCRIPT, path.join(dir, INDEX_GUARD_SCRIPT), managed)
 }
 
 // Delete pre-1.1 .js generator copies superseded by the .cjs ones.
@@ -244,7 +249,13 @@ function wireVersionHook(dir, release, { force }) {
   }
   if (genCmds.length === 0) return
 
-  const versionCmd = [...genCmds, `git add ${addFiles.join(' ')}`].join(' && ')
+  // Stage the generated files by name, then refuse to reach npm's commit if
+  // anything else got staged while the generators ran (see the guard script).
+  const versionCmd = [
+    ...genCmds,
+    `git add ${addFiles.join(' ')}`,
+    'node scripts/check-release-index.cjs',
+  ].join(' && ')
 
   const before = JSON.stringify(pkg)
   pkg.scripts = pkg.scripts || {}

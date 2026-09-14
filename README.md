@@ -11,10 +11,11 @@ you can adopt release tooling without the spec workflow (and vice versa).
 
 | Into | What |
 |------|------|
-| `.claude/skills/commit/SKILL.md` | The `/commit` skill — stages task-related files, runs typecheck + tests, writes a Conventional Commit |
+| `.claude/skills/commit/SKILL.md` | The `/commit` skill — stages each file by name, runs typecheck + tests, writes a Conventional Commit and commits it with that same pathspec |
 | `.claude/rules/commit-messages.md` | Commit grammar: `type(scope): subject`, and the `Release-Note:` footer rules |
 | `scripts/generate-changelog.cjs` | Regenerates the dev-facing `CHANGELOG.md` from commit subjects |
 | `scripts/generate-releases.cjs` | Regenerates the user-facing `RELEASES.md` from `Release-Note:` footers |
+| `scripts/check-release-index.cjs` | Aborts `npm version` if anything unexpected is staged (npm's own commit takes no pathspec) |
 | `scripts/lib/` | Shared, zero-dependency git/config helpers |
 | `skittership.config.json` | Filenames, product name, scope→area map, feature toggles |
 | `package.json` `version` hook | Regenerates both artifacts at `npm version` (opt-in) |
@@ -61,7 +62,9 @@ not user-facing. The terse subject feeds `CHANGELOG.md`; the footer feeds
 ```sh
 npm run changelog        # regenerate CHANGELOG.md for the current version
 npm run releases         # regenerate RELEASES.md for the current version
-npm run changelog:retro  # backfill from prior tags
+npm run changelog:retro  # backfill every prior tag
+npm run releases:retro   # same, for RELEASES.md
+node scripts/generate-changelog.cjs --retro 3   # or just the newest 3
 ```
 
 ## Configuration

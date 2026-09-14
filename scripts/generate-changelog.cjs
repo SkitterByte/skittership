@@ -245,11 +245,17 @@ function main(argv) {
   const retroIdx = args.indexOf('--retro')
 
   if (retroIdx >= 0) {
+    // `--retro` with no count backfills every version tag. The npm helper the
+    // installer wires (`changelog:retro`) passes no count, so requiring one
+    // made that script impossible to run.
     const countArg = args[retroIdx + 1]
-    const count = Number.parseInt(countArg ?? '', 10)
-    if (!Number.isFinite(count) || count <= 0) {
-      console.error('Usage: generate-changelog.cjs --retro <count>')
-      process.exit(1)
+    let count = Number.POSITIVE_INFINITY
+    if (countArg !== undefined && !countArg.startsWith('-')) {
+      count = Number.parseInt(countArg, 10)
+      if (!Number.isFinite(count) || count <= 0) {
+        console.error('Usage: generate-changelog.cjs --retro [count]   (default: all version tags)')
+        process.exit(1)
+      }
     }
     retroFillChangelog(count, options)
   } else {
