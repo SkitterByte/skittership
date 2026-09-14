@@ -70,11 +70,10 @@ jobs:
           echo "tag and package.json agree on $pkg"
 
       # npm generates provenance automatically under Trusted Publishing.
-      # Not redundant with prepublishOnly: it is undocumented whether that
-      # hook fires for `npm stage publish`, and an unverified build must not
-      # reach the staging area. The suite runs in under a second.
-      - run: npm test
-
+      # No separate test step: `npm stage publish` runs the prepublishOnly
+      # hook (confirmed by watching a real run), which runs the suite. Adding
+      # one here just runs every test twice.
+      #
       # Stage rather than publish. The trusted publisher is stage-only, so the
       # build waits in the staging area until a maintainer approves it with 2FA
       # (`npm stage approve`, or on npmjs.com). See CLAUDE.md, "Releasing this
