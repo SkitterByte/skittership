@@ -33,7 +33,11 @@ type(scope): subject
 - No **authorship** trailers — `Co-authored-by`, `Signed-off-by`, etc.
   (The `Release-Note:` footers below are the one permitted exception — they
   carry content, not attribution.)
-- Use plain `git commit -m "message"` only
+- Commit with an explicit pathspec and no flags beyond `-m`:
+  `git commit -m "message" -- <path> <path>`, naming the same paths you
+  staged. Concurrent sessions share one `.git/index`, so the pathspec — not
+  the `git add` — is what bounds the commit to your files. See the `/commit`
+  skill, "Why both halves are required".
 - Output ONLY the commit message — no explanations before or after
 
 ## Release notes footer (user-facing changes)
