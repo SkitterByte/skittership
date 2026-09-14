@@ -75,20 +75,24 @@ optional:
 
 ```
 npm run approve                 # approve the version in package.json
-npm run approve -- 2.0.1        # approve a specific version
+npm run approve 2.0.1           # approve a specific version
+npm run approve <stage-id>      # approve a specific staged build
 npm run approve -- --reject     # discard it instead
 npm run staged                  # just list what is waiting
 ```
 
-`npm run approve` wraps `npm stage approve`, filling in the package name and
-defaulting to the version in `package.json` — which is almost always the one you
-just cut. It lists what is staged first, and warns if there is no matching local
-tag, to catch a typo'd version before you approve the wrong thing.
+You need to be logged in first (`npm login`), and on npm >= 11.15.0 — older
+npm has no `stage` command at all.
 
-Underneath it is plain `npm stage approve <pkg>@<version>`; `npm stage view` and
-`npm stage download` inspect a build first, and approval also works from the
-package page on npmjs.com. The prompt is interactive by design — it is the 2FA
-gate, so it cannot be automated, and that is the point.
+`npm stage approve|reject|view|download` all take a **stage-id** (a UUID), not a
+package spec; only `npm stage list` accepts a spec. `npm run approve` exists to
+bridge that: it looks the version up in the listing, resolves it to its
+stage-id, and approves that. Pass a bare UUID and it is used directly. If the
+version is not staged, it prints what is, rather than failing obscurely.
+
+The prompt is interactive by design — it is the 2FA gate, so it cannot be
+automated, and that is the point. Approval also works from the package page on
+npmjs.com.
 
 Confirm it landed with `npm view @skitterbyte/skittership dist-tags`.
 

@@ -9,8 +9,14 @@
  * That gate is the point; this script only shortens the typing around it.
  *
  *   npm run approve              approve the version in package.json
- *   npm run approve -- 2.0.1     approve a specific version
+ *   npm run approve 2.0.1        approve a specific version
+ *   npm run approve <uuid>       approve a specific stage-id directly
  *   npm run approve -- --reject  reject instead of approving
+ *
+ * `npm stage approve|reject|view|download` all take a STAGE-ID (a UUID), not a
+ * package spec — only `npm stage list` accepts a spec. So the version you pass
+ * has to be resolved to an id via the listing first, which is the bulk of the
+ * work here.
  *
  * REPO-LOCAL. Unlike its siblings in this directory, this file is not mirrored
  * from assets/ and is not shipped to consumers — staged publishing is how THIS
@@ -24,6 +30,8 @@ const { join } = require('node:path')
 // `npm stage` landed in 11.15.0; older npm fails with an opaque "unknown
 // command", which reads as a broken script rather than a stale toolchain.
 const MIN_NPM = [11, 15, 0]
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 function readPackage() {
   const raw = readFileSync(join(__dirname, '..', 'package.json'), 'utf8')
@@ -45,30 +53,59 @@ function tooOld(actual, min) {
   return false
 }
 
-/** Local tag for a version, used only to catch a typo'd argument. */
-function tagExists(version) {
-  try {
-    execFileSync('git', ['rev-parse', '--verify', '--quiet', `refs/tags/v${version}`], {
-      stdio: 'ignore',
-    })
-    return true
-  } catch {
-    return false
-  }
-}
-
 function parseArgs(argv) {
   const args = argv.slice(2)
   const action = args.includes('--reject') ? 'reject' : 'approve'
-  const version = args.find((a) => !a.startsWith('-'))
-  return { action, version }
+  const target = args.find((a) => !a.startsWith('-'))
+  return { action, target }
+}
+
+/**
+ * Normalise `npm stage list --json` into {id, version} rows.
+ *
+ * The documented output shape is thin on field names, so rather than depend on
+ * one spelling this accepts any of the obvious ones and, failing that, scans
+ * the row for a UUID-shaped value. A listing we cannot parse is reported as
+ * such — never silently treated as "nothing staged".
+ */
+function normaliseEntries(parsed) {
+  let rows = parsed
+  if (rows && !Array.isArray(rows)) {
+    rows = rows.staged || rows.versions || rows.stages || Object.values(rows)
+  }
+  if (!Array.isArray(rows)) return []
+
+  return rows
+    .filter((row) => row && typeof row === 'object')
+    .map((row) => {
+      const id =
+        [row.id, row.stageId, row.stage_id, row.stageID].find(
+          (v) => typeof v === 'string' && UUID.test(v),
+        ) || Object.values(row).find((v) => typeof v === 'string' && UUID.test(v))
+
+      let version = row.version
+      if (!version) {
+        const spec = row.spec || row.package || row._id
+        if (typeof spec === 'string' && spec.includes('@')) {
+          version = spec.slice(spec.lastIndexOf('@') + 1)
+        }
+      }
+      return { id, version }
+    })
+    .filter((row) => row.id)
+}
+
+function listStaged(name) {
+  const out = execFileSync('npm', ['stage', 'list', name, '--json'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  return normaliseEntries(JSON.parse(out))
 }
 
 function main(argv) {
   const { name, version: current } = readPackage()
-  const { action, version: requested } = parseArgs(argv)
-  const version = requested || current
-  const spec = `${name}@${version}`
+  const { action, target } = parseArgs(argv)
 
   const npm = npmVersion()
   if (tooOld(npm, MIN_NPM)) {
@@ -79,40 +116,68 @@ function main(argv) {
     process.exit(1)
   }
 
-  if (requested && requested !== current) {
-    console.log(`Note: package.json is on ${current}, you asked for ${version}.`)
-  }
-  if (!tagExists(version)) {
-    console.log(`Note: no local tag v${version} — check the version is right.`)
+  // A stage-id can be passed straight through; anything else is a version.
+  let stageId = target && UUID.test(target) ? target : null
+  const version = stageId ? null : target || current
+
+  if (!stageId) {
+    let staged
+    try {
+      staged = listStaged(name)
+    } catch {
+      console.error(
+        `\n✖ Could not list staged releases for ${name}.\n` +
+          `  If that was an auth error, log in first:  npm login\n` +
+          `  (staged publishing needs an authenticated, 2FA-capable session)\n`,
+      )
+      process.exit(1)
+    }
+
+    if (staged.length === 0) {
+      console.error(
+        `\n✖ Nothing is staged for ${name}.\n` +
+          `  CI stages a build on a successful publish workflow run; check that\n` +
+          `  it completed, then try again.\n`,
+      )
+      process.exit(1)
+    }
+
+    const matches = staged.filter((row) => row.version === version)
+    if (matches.length === 0) {
+      console.error(`\n✖ No staged release for ${name}@${version}. Staged right now:\n`)
+      for (const row of staged) console.error(`    ${row.version || '(unknown)'}  ${row.id}`)
+      console.error(`\n  Re-run with the version you want, or pass a stage-id directly.\n`)
+      process.exit(1)
+    }
+    if (matches.length > 1) {
+      console.error(`\n✖ ${matches.length} staged entries for ${name}@${version}:\n`)
+      for (const row of matches) console.error(`    ${row.id}`)
+      console.error(`\n  Pass the stage-id you want:  npm run approve <stage-id>\n`)
+      process.exit(1)
+    }
+    stageId = matches[0].id
   }
 
-  console.log(`\nStaged releases:\n`)
-  try {
-    // Advisory only: a listing failure (not logged in, nothing staged) must not
-    // stop the approve itself from running and reporting the real reason.
-    execFileSync('npm', ['stage', 'list'], { stdio: 'inherit' })
-  } catch {
-    console.log('  (could not list staged releases)')
-  }
-
-  console.log(`\n${action === 'approve' ? 'Approving' : 'Rejecting'} ${spec} …`)
+  const what = version ? `${name}@${version}` : `stage ${stageId}`
+  console.log(`\n${action === 'approve' ? 'Approving' : 'Rejecting'} ${what}`)
+  console.log(`stage-id: ${stageId}`)
   console.log('This prompts for 2FA — it is the release gate, so it cannot be automated.\n')
 
   try {
     // stdio must be inherited: the 2FA prompt needs the real terminal.
-    execFileSync('npm', ['stage', action, spec], { stdio: 'inherit' })
+    execFileSync('npm', ['stage', action, stageId], { stdio: 'inherit' })
   } catch {
-    console.error(`\n✖ \`npm stage ${action} ${spec}\` failed — see the error above.`)
+    console.error(`\n✖ \`npm stage ${action} ${stageId}\` failed — see the error above.`)
     process.exit(1)
   }
 
   if (action === 'approve') {
-    console.log(`\n✅ ${spec} approved. Confirm with:\n    npm view ${name} dist-tags\n`)
+    console.log(`\n✅ ${what} approved. Confirm with:\n    npm view ${name} dist-tags\n`)
   } else {
-    console.log(`\n✅ ${spec} rejected and discarded.\n`)
+    console.log(`\n✅ ${what} rejected and discarded.\n`)
   }
 }
 
 if (require.main === module) main(process.argv)
 
-module.exports = { parseArgs, tooOld }
+module.exports = { parseArgs, tooOld, normaliseEntries, UUID }
