@@ -29,7 +29,12 @@
     "prompts": "^2.4.2"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "version": "node scripts/generate-changelog.cjs && node scripts/generate-releases.cjs && git add CHANGELOG.md RELEASES.md",
+    "changelog": "node scripts/generate-changelog.cjs",
+    "changelog:retro": "node scripts/generate-changelog.cjs --retro",
+    "releases": "node scripts/generate-releases.cjs",
+    "releases:retro": "node scripts/generate-releases.cjs --retro"
   },
   "repository": {
     "type": "git",

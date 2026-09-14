@@ -1,3 +1,6 @@
+# skittership
+
+<!-- skittership:start -->
 ## Release tooling
 
 This project uses **skittership** for commits, changelog, and user-facing release
@@ -17,3 +20,4 @@ notes. See `.claude/rules/commit-messages.md` for the full commit grammar.
   (when the hook is wired), or on demand via `npm run changelog` / `npm run
   releases`. Filenames, product name, and the scope→area map live in
   `skittership.config.json`.
+<!-- skittership:end -->

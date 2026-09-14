@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "changelog": {
+    "enabled": true,
+    "file": "CHANGELOG.md"
+  },
+  "releases": {
+    "enabled": true,
+    "file": "RELEASES.md",
+    "productName": "skittership",
+    "scopeAreas": {
+      "commit": "Commit skill",
+      "cli": "Installer",
+      "init": "Installer",
+      "scripts": "Release tooling",
+      "releases": "Release tooling"
+    }
+  },
+  "versionHook": true
+}
