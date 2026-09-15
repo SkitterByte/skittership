@@ -105,7 +105,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
           { encoding: 'utf-8', stdio: 'pipe' },
         ).trim()
 
-        report(`all history — no earlier tag (through ${currentTag})`)
+        report(`all history through ${currentTag} — no earlier tag`)
         return reconstructCommits(output)
       }
     } else {
@@ -269,6 +269,35 @@ function getCommitsBetween(fromTag, toTag) {
   return reconstructCommits(output)
 }
 
+/** Does this tag exist? Used to tell "already released" from "being released". */
+function tagExists(tag) {
+  try {
+    execSync(`git rev-parse --verify --quiet ${tag}^{commit}`, { stdio: 'pipe' })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Commits after `tag` up to HEAD — the work a release would cover NEXT.
+ *
+ * Reported when a generator declines to include them, so "nothing changed" does
+ * not read as "there is nothing pending". Returns 0 rather than throwing on a
+ * tag that is not there; the caller has already established it exists.
+ */
+function countCommitsSince(tag) {
+  try {
+    const out = execSync(`git rev-list --count --no-merges ${tag}..HEAD`, {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    }).trim()
+    return Number.parseInt(out, 10) || 0
+  } catch {
+    return 0
+  }
+}
+
 function getTagDate(tag) {
   try {
     return execSync(`git log -1 --format=%cs ${tag}`, { encoding: 'utf-8', stdio: 'pipe' }).trim()
@@ -315,6 +344,8 @@ function indexOfOlderSection(content, version, headingRegex) {
 
 module.exports = {
   compareVersions,
+  countCommitsSince,
+  tagExists,
   indexOfOlderSection,
   getCommitsSinceLastTag,
   reconstructCommits,

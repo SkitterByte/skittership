@@ -177,7 +177,7 @@ test('names the whole-history fallback, and the tag it is bounded by', () => {
   // Bounded by the tag, not bare `git log`: with currentTag resolved from the
   // version fallback, HEAD can be past the tag, and an unbounded log would
   // fold post-release work into a released section.
-  assert.strictEqual(rangeOf(dir, '1.0.0'), 'all history — no earlier tag (through v1.0.0)')
+  assert.strictEqual(rangeOf(dir, '1.0.0'), 'all history through v1.0.0 — no earlier tag')
 })
 
 test('names the no-tags case distinctly', () => {

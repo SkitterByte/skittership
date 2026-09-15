@@ -100,3 +100,39 @@ test('the released section is not polluted by commits made after its tag', () =>
   assert.match(body, /shipped/)
   assert.doesNotMatch(body, /later/, 'post-tag work must not be folded into a released section')
 })
+
+// --- honest reporting -------------------------------------------------------
+
+// A run that changed nothing used to print "✅ Updated …", while also silently
+// excluding every commit made since the tag. Both halves were invisible: the
+// file was not updated, and the work that is actually pending was not covered.
+
+test('a no-op run says so instead of claiming an update', () => {
+  const { dir } = releasedRepo()
+  gen(dir) // writes the 2.0.0 section
+  const out = gen(dir) // same inputs — nothing left to do
+
+  assert.match(out, /v2\.0\.0 is already tagged/)
+  assert.match(out, /unchanged/)
+  assert.doesNotMatch(out, /✅ Updated/, 'must not claim an update that did not happen')
+})
+
+test('a no-op run names the work it is excluding', () => {
+  const { dir } = releasedRepo()
+  gen(dir)
+  const out = gen(dir)
+
+  // The fixture has one commit after the v2.0.0 tag.
+  assert.match(out, /1 commit\(s\) since that tag are not included/)
+  assert.match(out, /bump the version/, 'and how to release them')
+})
+
+test('a real update still reports as one', () => {
+  const { dir, setVersion } = releasedRepo()
+  gen(dir)
+  setVersion('2.1.0')
+  const out = gen(dir)
+
+  assert.match(out, /✅ Updated/)
+  assert.doesNotMatch(out, /already tagged/)
+})
