@@ -5,6 +5,7 @@ const path = require('path')
 
 const { loadConfig, SCHEMA_VERSION } = require('./config.js')
 const {
+  MANIFEST_FILE,
   hashContent,
   managedState,
   manifestKey,
@@ -441,7 +442,7 @@ function wireVersionHook(dir, release, { force }) {
   }
 }
 
-function printReport(dir, mode, migration, versions) {
+function printReport(dir, mode, migration, versions, hadManifest) {
   const line = (label, items) => {
     if (!items.length) return
     process.stdout.write(`\n${label}:\n`)
@@ -469,6 +470,24 @@ function printReport(dir, mode, migration, versions) {
     process.stdout.write('\nwarnings:\n')
     for (const w of report.warnings) process.stdout.write(`  ! ${w}\n`)
   }
+  // The moment of confusion is HERE, not in the README: a first upgrade keeps
+  // everything for lack of a manifest, and without this the run reads as
+  // "update did nothing" with no hint why. Say it where it happens.
+  if (!hadManifest && report.unknown.length) {
+    process.stdout.write(
+      '\nWhy nothing was updated: this project has no record of what skittership\n' +
+        `last wrote (${MANIFEST_FILE}), so every managed file above was kept\n` +
+        'rather than risk overwriting your edits. That is expected on the first\n' +
+        'upgrade to a version that records one.\n\n' +
+        '  1. Save a copy of any managed file you have edited.\n' +
+        '  2. Re-run with --force to take the new files and start the record.\n' +
+        '  3. Re-apply your edits ON TOP of the new files — do not restore the\n' +
+        '     old ones wholesale, or you discard the update you just took.\n\n' +
+        'From then on `update` keeps your edits automatically and lists them as\n' +
+        `customized. Commit ${MANIFEST_FILE} so your collaborators share the record.\n`,
+    )
+  }
+
   process.stdout.write(
     '\nDone. The /commit skill and commit-message rule are installed; the' +
       ' changelog / release-notes generators run at `npm version` (when the hook' +
@@ -521,9 +540,13 @@ async function init({ dir, force, claudeMd, mode, release }) {
   // partial one that threw halfway through.
   writeManifest(dir, { installedVersion: PKG_VERSION, files: { ...manifestFiles } })
 
-  printReport(dir, mode, migration, {
-    from: priorManifest && priorManifest.installedVersion,
-  })
+  printReport(
+    dir,
+    mode,
+    migration,
+    { from: priorManifest && priorManifest.installedVersion },
+    Boolean(priorManifest),
+  )
 }
 
 module.exports = {

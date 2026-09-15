@@ -20,6 +20,16 @@ notes. See `.claude/rules/commit-messages.md` for the full commit grammar.
   (when the hook is wired), or on demand via `npm run changelog` / `npm run
   releases`. Filenames, product name, and the scope→area map live in
   `skittership.config.json`.
+- **Upgrading** — `skittership update` re-syncs the managed files but keeps any
+  you have edited, listing them as `customized — kept`; `--force` overwrites
+  them. It tells the two apart using `.skittership-manifest.json`, a record of
+  what it last wrote — **commit that file**, and do not add it to `.gitignore`.
+  The tailoring this section invites is therefore safe to keep across upgrades.
+  On the **first** upgrade to a version that records one there is no manifest
+  yet, so everything is kept and little changes: save copies of any files you
+  have edited, run `update --force` once to take the new files and seed the
+  record, then re-apply your edits on top of the new files — never by restoring
+  the old ones, which would discard the update.
 <!-- skittership:end -->
 
 <!-- skitterspec:start -->

@@ -173,3 +173,42 @@ test('keeping files still exits 0', async () => {
   const out = execFileSync('node', [BIN, 'update', '--dir', dir], { encoding: 'utf8' })
   assert.match(out, /customized — kept/)
 })
+
+// --- first-upgrade guidance -------------------------------------------------
+
+// The moment of confusion is the run itself: a first upgrade keeps everything
+// for lack of a manifest, so the report is a list of "not recorded — kept" and
+// nothing else. Without an explanation it reads as "update did nothing".
+
+test('a first upgrade explains why nothing was updated', async () => {
+  const dir = await installed()
+  write(dir, SKILL_REL, 'FROM AN OLDER SKITTERSHIP\n')
+  fs.rmSync(path.join(dir, MANIFEST_FILE))
+
+  const out = await update(dir)
+
+  assert.match(out, /Why nothing was updated/)
+  assert.match(out, /--force/, 'names the remedy')
+  assert.match(out, /on top of the new files/i, 'warns against restoring wholesale')
+})
+
+test('no guidance once a manifest exists', async () => {
+  const dir = await installed()
+  write(dir, SKILL_REL, 'MY OWN VERSION\n')
+
+  const out = await update(dir)
+
+  assert.match(out, /customized — kept/, 'it is customized, not unrecorded')
+  assert.doesNotMatch(out, /Why nothing was updated/, 'the explanation does not apply')
+})
+
+// Stays-silent: a manifest-less project whose files all already match ours has
+// nothing kept, so there is nothing to explain and the notice must not fire.
+test('no guidance when nothing was actually kept', async () => {
+  const dir = await installed()
+  fs.rmSync(path.join(dir, MANIFEST_FILE))
+
+  const out = await update(dir)
+
+  assert.doesNotMatch(out, /Why nothing was updated/)
+})
