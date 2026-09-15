@@ -5,6 +5,11 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.0.5 — 15 Sep 2026
+
+### Release tooling
+- **Fixed** — Running the changelog or release-notes generator between releases now tells you what it did. It previously reported success without changing anything, while silently leaving out every commit made since the last release; it now says the version is already tagged, that the file is unchanged, and how many commits are waiting for the next version bump.
+
 ## 2.0.4 — 15 Sep 2026
 
 ### Installer
