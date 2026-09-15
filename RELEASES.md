@@ -5,6 +5,11 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.0.2 — 15 Sep 2026
+
+### Release tooling
+- **Fixed** — Releasing from a pnpm, yarn or bun project now works. The release guard treated your lockfile as an unexpected staged file and stopped the release every time; it now recognises the lockfiles of every package manager, while still catching files another session left staged.
+
 ## 2.0.1 — 14 Sep 2026
 
 ### Release tooling
