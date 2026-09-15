@@ -297,6 +297,62 @@ function removeLegacyScripts(dir) {
 
 // Idempotently add the npm scripts that drive generation at `npm version`.
 // Never overwrites a user's custom `version` script without --force.
+/** An npm script's `&&` steps, trimmed. */
+function splitSteps(script) {
+  return String(script)
+    .split('&&')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Decide what to do with an existing `version` script, as a set of steps rather
+ * than one string.
+ *
+ * The old code composed the canonical command and assigned it whole, so any
+ * step a consumer had added — a `prettier --write` between generating and
+ * staging, say — vanished on upgrade and surfaced at the next release when a
+ * formatting gate failed on generated files. Comparing step sets lets us add
+ * what is missing and leave the rest alone.
+ *
+ *   'write'  — nothing there (or --force): take the canonical command
+ *   'skip'   — every canonical step present, in a workable order: touch nothing
+ *   'append' — only the guard is missing: add it as the LAST step
+ *   'warn'   — anything else: print what they would need, change nothing
+ *
+ * The guard must be last because it inspects the index immediately before npm
+ * commits; a step running after it can stage the very thing it was checking
+ * for. That is also why a guard found out of position is a 'warn' and not a
+ * silent reorder — a release hook is a critical path, and a surprise edit there
+ * is worse than a stale one.
+ */
+function planVersionHook(existing, canonicalSteps) {
+  const canonical = canonicalSteps.join(' && ')
+  if (!existing) return { action: 'write', script: canonical }
+
+  const steps = splitSteps(existing)
+  const guard = canonicalSteps[canonicalSteps.length - 1]
+  const missing = canonicalSteps.filter((step) => !steps.includes(step))
+
+  if (missing.length === 0) {
+    const guardLast = steps[steps.length - 1] === guard
+    const addIdx = steps.findIndex((s) => s.startsWith('git add'))
+    const generatorsFirst = canonicalSteps
+      .filter((s) => s.startsWith('node scripts/generate-'))
+      .every((s) => steps.indexOf(s) < addIdx)
+    if (guardLast && generatorsFirst) return { action: 'skip' }
+    return { action: 'warn', reason: 'order', canonical }
+  }
+
+  if (missing.length === 1 && missing[0] === guard) {
+    return { action: 'append', script: [...steps, guard].join(' && ') }
+  }
+
+  // A consumer may have dropped a generator deliberately. Reinstating it would
+  // start writing a file they chose not to generate.
+  return { action: 'warn', reason: 'missing', missing, canonical }
+}
+
 function wireVersionHook(dir, release, { force }) {
   const pkgPath = path.join(dir, 'package.json')
   if (!fs.existsSync(pkgPath)) {
@@ -326,22 +382,41 @@ function wireVersionHook(dir, release, { force }) {
 
   // Stage the generated files by name, then refuse to reach npm's commit if
   // anything else got staged while the generators ran (see the guard script).
-  const versionCmd = [
+  const canonicalSteps = [
     ...genCmds,
     `git add ${addFiles.join(' ')}`,
     'node scripts/check-release-index.cjs',
-  ].join(' && ')
+  ]
+  const versionCmd = canonicalSteps.join(' && ')
 
   const before = JSON.stringify(pkg)
   pkg.scripts = pkg.scripts || {}
 
-  if (pkg.scripts.version && pkg.scripts.version !== versionCmd && !force) {
+  const plan = force
+    ? { action: 'write', script: versionCmd }
+    : planVersionHook(pkg.scripts.version, canonicalSteps)
+
+  if (plan.action === 'write') {
+    pkg.scripts.version = plan.script
+  } else if (plan.action === 'append') {
+    pkg.scripts.version = plan.script
+    report.updated.push('package.json (added the release guard to your "version" script)')
+  } else if (plan.action === 'skip') {
+    report.skipped.push('version hook (already complete)')
+  } else if (plan.reason === 'order') {
     report.warnings.push(
-      'Kept your existing "version" npm script. To regenerate on release, add:\n' +
-        `      "version": "${versionCmd}"  (or re-run with --force)`,
+      'Kept your "version" npm script: its steps are all present but out of order.\n' +
+        '      The guard must run last — a step after it can stage the very thing\n' +
+        '      it checks for. Canonical order:\n' +
+        `      "version": "${plan.canonical}"  (or re-run with --force)`,
     )
   } else {
-    pkg.scripts.version = versionCmd
+    report.warnings.push(
+      `Kept your "version" npm script: it is missing ${plan.missing.length} step(s).\n` +
+        plan.missing.map((s) => `        ${s}`).join('\n') +
+        '\n      Not added automatically — you may have removed them on purpose.\n' +
+        `      Canonical: "${plan.canonical}"  (or re-run with --force)`,
+    )
   }
 
   const helpers = {}
@@ -454,6 +529,8 @@ async function init({ dir, force, claudeMd, mode, release }) {
 module.exports = {
   init,
   PKG_VERSION,
+  planVersionHook,
+  splitSteps,
   SKILLS,
   RULES,
   releaseFromConfig,

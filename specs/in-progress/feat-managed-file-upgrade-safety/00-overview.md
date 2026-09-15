@@ -2,7 +2,7 @@
 
 > **Name:** feat-managed-file-upgrade-safety
 > **Type:** Feature
-> **Status:** In Progress — Phase 3 next (started 2026-09-15)
+> **Status:** In Progress — all phases done, ready for /spec-complete
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-09-15
@@ -111,7 +111,7 @@ migration that adds what is missing and preserves what is there.
 |---|-------|--------|
 | 1 | [Stamp provenance](01-stamp-provenance.md) | ✅ |
 | 2 | [Classify on update](02-classify-on-update.md) | ✅ |
-| 3 | [Migrate the version hook](03-migrate-version-hook.md) | ⬜ |
+| 3 | [Migrate the version hook](03-migrate-version-hook.md) | ✅ |
 
 ## Open questions
 
@@ -203,3 +203,28 @@ migration that adds what is missing and preserves what is there.
   changes until one `update --force` seeds it. Seeding from published tarball
   hashes stays unbuilt — it is worth its own spec if the one-time `--force`
   proves too blunt in practice.
+
+- **2026-09-15** — Phase 3 done; all three phases complete. `wireVersionHook`
+  now compares the hook as a SET of `&&` steps and plans one of four actions —
+  write / skip / append / warn — via a pure `planVersionHook`, which is what
+  made the ordering rules testable without a filesystem.
+
+  Two notes on the evidence, so the red half is not overstated:
+
+  - Of the 12 phase-3 tests, 8 fail against the pre-phase code, but **six of
+    those fail only because `planVersionHook` and `splitSteps` did not exist**.
+    The real regression evidence is the two end-to-end failures — a customised
+    hook losing its `prettier` step, and a hook missing a generator being
+    rewritten rather than warned about. The other four pass on both, which is
+    the point: they are the stays-silent guarantees (`--force` still replaces,
+    a complete hook is untouched, a hookless project gets the canonical one,
+    and a project with generation disabled gets nothing).
+  - The helper-script behaviour was already correct, so its task was a
+    confirmation rather than a change. Reading the code was not enough to close
+    it honestly — it is now pinned by a test, so the rework cannot quietly
+    regress it.
+
+  A case the phase did not list: a hook carrying every canonical step but with
+  the guard NOT last. Silently reordering a release-critical script is exactly
+  what this phase argues against, so it warns and changes nothing, same as a
+  missing step.
