@@ -6,8 +6,10 @@ const path = require('path')
 const { loadConfig, SCHEMA_VERSION } = require('./config.js')
 const {
   hashContent,
+  managedState,
   manifestKey,
   readManifest,
+  recordedHash,
   writeManifest,
 } = require('./manifest.js')
 
@@ -52,7 +54,15 @@ const RULES = ['commit-messages.md']
 const SPEC_MARKER_START = '<!-- skittership:start -->'
 const SPEC_MARKER_END = '<!-- skittership:end -->'
 
-const report = { created: [], updated: [], skipped: [], removed: [], warnings: [] }
+const report = {
+  created: [],
+  updated: [],
+  skipped: [],
+  removed: [],
+  customized: [],
+  unknown: [],
+  warnings: [],
+}
 
 // Hashes recorded during THIS run, keyed by consumer-relative path. Populated
 // as each managed file is written rather than by a second pass over the tree
@@ -74,37 +84,68 @@ function ensureDir(p) {
 //   'skipped'              — it exists and we did NOT look at it
 // Only the first three are provenance. 'skipped' means we never compared, so
 // recording a hash for it would assert something this run did not establish.
-function writeFile(dir, target, content, { force }) {
-  if (fs.existsSync(target)) {
-    if (!force) {
-      report.skipped.push(rel(dir, target))
-      return 'skipped'
-    }
-    const existing = fs.readFileSync(target, 'utf8')
-    if (existing === content) {
-      report.skipped.push(rel(dir, target))
-      return 'unchanged'
-    }
+// Route a managed file by what we can establish about it, not by force alone.
+//
+// Returns the state it acted on, so copyAsset knows whether this run may claim
+// the file as ours. `--force` overwrites in every row — that is what it is for.
+function writeFile(dir, target, content, { force, manifest }) {
+  const relPath = rel(dir, target)
+  const exists = fs.existsSync(target)
+  const onDisk = exists ? fs.readFileSync(target, 'utf8') : null
+  const state = managedState({
+    exists,
+    onDisk,
+    content,
+    recorded: recordedHash(manifest, manifestKey(relPath)),
+  })
+
+  if (state === 'absent') {
+    ensureDir(path.dirname(target))
     fs.writeFileSync(target, content)
-    report.updated.push(rel(dir, target))
-    return 'updated'
+    report.created.push(relPath)
+    return state
   }
-  ensureDir(path.dirname(target))
-  fs.writeFileSync(target, content)
-  report.created.push(rel(dir, target))
-  return 'created'
+  if (state === 'identical') {
+    report.skipped.push(relPath)
+    return state
+  }
+  if (state === 'ours' || force) {
+    fs.writeFileSync(target, content)
+    report.updated.push(relPath)
+    return state === 'ours' ? state : `${state}-forced`
+  }
+
+  // 'customized' — it differs from what we wrote, so it is the consumer's.
+  // 'unknown'    — nothing recorded, so we cannot tell; keeping is the
+  //                harmless branch and --force is the way out.
+  // Exit stays 0: keeping a file is an expected outcome, not a failure, and a
+  // non-zero here would break anyone running update in a scripted setup step.
+  if (state === 'customized') report.customized.push(relPath)
+  else report.unknown.push(relPath)
+  return state
 }
 
 function copyAsset(dir, assetRelPath, targetAbs, opts) {
   const content = fs.readFileSync(path.join(ASSETS, assetRelPath), 'utf8')
-  const outcome = writeFile(dir, targetAbs, content, opts)
-  // Record provenance only for files this run actually established: ones we
-  // wrote, and ones we compared and found identical. A 'skipped' file was never
-  // opened, so claiming its hash would be the exact lie phase 2 would act on.
-  if (outcome !== 'skipped') {
-    manifestFiles[manifestKey(rel(dir, targetAbs))] = hashContent(content)
+  const state = writeFile(dir, targetAbs, content, opts)
+  const key = manifestKey(rel(dir, targetAbs))
+
+  // Record provenance only where this run established it: files we wrote, and
+  // files we compared and found identical to what we ship.
+  //
+  // A KEPT file (customized/unknown) is different: we did not write it, so we
+  // cannot claim its current bytes — but what we last wrote has not changed
+  // either. Carry the prior entry forward so the next run can still tell the
+  // consumer's edit from our old copy. Dropping it would downgrade every
+  // customized file to 'unknown' on the following update, losing the very
+  // distinction this feature exists to make.
+  if (state === 'customized' || state === 'unknown') {
+    const prior = recordedHash(opts.manifest, key)
+    if (prior) manifestFiles[key] = prior
+  } else {
+    manifestFiles[key] = hashContent(content)
   }
-  return outcome
+  return state
 }
 
 function installSkills(dir, opts) {
@@ -223,10 +264,14 @@ function writeConfig(dir, release) {
 // e.g. an old lib/config.js still resolving skitterspec.config.json — and would
 // strand pre-1.1 .js copies next to the new .cjs ones. `force: true` here is
 // safe because these files carry no user edits worth preserving.
-function installScripts(dir, release, _opts) {
+function installScripts(dir, release, opts) {
   if (!release.changelog.enabled && !release.releases.enabled) return
   removeLegacyScripts(dir)
-  const managed = { force: true }
+  // These used to be written with a hardcoded force: true, justified as "these
+  // files carry no user edits worth preserving" — which nothing could actually
+  // establish. Now they go through the same classification as every other
+  // managed file, so a consumer who extended a generator keeps their work.
+  const managed = opts
   for (const lib of SHARED_LIB) {
     copyAsset(dir, lib, path.join(dir, lib), managed)
   }
@@ -340,6 +385,11 @@ function printReport(dir, mode, migration, versions) {
   line('updated', report.updated)
   line('removed', report.removed)
   line('unchanged', report.skipped)
+  // The remedy goes on the heading, not in a footnote: someone scanning this
+  // output needs to know in one line why their file was left alone and how to
+  // take the new version anyway.
+  line('customized — kept (re-run with --force to overwrite)', report.customized)
+  line('not recorded — kept (no manifest entry; --force to overwrite)', report.unknown)
   if (report.warnings.length) {
     process.stdout.write('\nwarnings:\n')
     for (const w of report.warnings) process.stdout.write(`  ! ${w}\n`)
@@ -359,6 +409,8 @@ async function init({ dir, force, claudeMd, mode, release }) {
   report.updated.length = 0
   report.skipped.length = 0
   report.removed.length = 0
+  report.customized.length = 0
+  report.unknown.length = 0
   report.warnings.length = 0
   for (const key of Object.keys(manifestFiles)) delete manifestFiles[key]
 
@@ -372,15 +424,18 @@ async function init({ dir, force, claudeMd, mode, release }) {
   // its config over instead of resetting the loader to defaults.
   const migration = migrateLegacyConfig(dir)
 
-  installSkills(dir, { force })
-  installRule(dir, { force })
+  // Every managed write is classified against the manifest read above.
+  const opts = { force, manifest: priorManifest }
+
+  installSkills(dir, opts)
+  installRule(dir, opts)
   if (claudeMd) installClaudeMd(dir, { mode })
 
   // Release tooling. The CLI resolves `release` from flags/prompts; when called
   // directly (e.g. tests, update) fall back to the on-disk/default config.
   const rel = release || releaseFromConfig(loadConfig(dir))
   if (mode !== 'update') writeConfig(dir, rel)
-  installScripts(dir, rel, { force })
+  installScripts(dir, rel, opts)
   // Wire in both modes: `update --force` must rewrite the npm command strings so
   // they point at the refreshed .cjs generators (a pre-1.1 project's hook still
   // names the now-deleted .js files). In `init` this keeps a custom `version`

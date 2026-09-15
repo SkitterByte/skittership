@@ -12,13 +12,15 @@ const HELP = `skittership — changelog + release-notes tooling for Claude Code
 Usage:
   skittership init [dir]      Install the /commit skill, commit-message rule, and
                               changelog/release-note generators into a project
-  skittership update [dir]    Re-copy the skill + rule + scripts (overwrites),
-                              leaves skittership.config.json alone
+  skittership update [dir]    Re-sync the skill + rule + scripts, keeping any
+                              you have edited; leaves skittership.config.json
+                              alone
   skittership --help          Show this help
   skittership --version       Print version
 
 Options (init / update):
-  --force                  Overwrite skill/rule/script files that already exist
+  --force                  Overwrite managed files even when they were edited
+                           locally (without it, update keeps yours and says so)
   --dir <path>             Target project dir (default: positional arg or cwd)
   --no-claude-md           Skip creating/patching CLAUDE.md
   --yes, -y                Accept defaults; skip the interactive setup prompts
@@ -132,7 +134,11 @@ async function run(argv) {
       // documented command doing the opposite of what it was asked is worse
       // than one that refuses.
       const release = resolveRelease(loadConfig(dir), opts)
-      await init({ dir, force: true, claudeMd: opts.claudeMd, mode: 'update', release })
+      // `update` no longer implies force. It classifies each managed file
+      // against the manifest and keeps anything it cannot prove is its own —
+      // so `update` and `update --force` now genuinely differ, which is what
+      // the help text has always claimed.
+      await init({ dir, force: opts.force, claudeMd: opts.claudeMd, mode: 'update', release })
       break
     }
     default:

@@ -2,7 +2,7 @@
 
 > **Name:** feat-managed-file-upgrade-safety
 > **Type:** Feature
-> **Status:** In Progress — Phase 2 next (started 2026-09-15)
+> **Status:** In Progress — Phase 3 next (started 2026-09-15)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-09-15
@@ -110,7 +110,7 @@ migration that adds what is missing and preserves what is there.
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | [Stamp provenance](01-stamp-provenance.md) | ✅ |
-| 2 | [Classify on update](02-classify-on-update.md) | ⬜ |
+| 2 | [Classify on update](02-classify-on-update.md) | ✅ |
 | 3 | [Migrate the version hook](03-migrate-version-hook.md) | ⬜ |
 
 ## Open questions
@@ -169,3 +169,37 @@ migration that adds what is missing and preserves what is there.
   covering both an absent manifest and a missing entry. `recordedHash` returns
   null for a non-string entry too, so a hand-mangled manifest degrades to
   "cannot tell" rather than throwing.
+
+- **2026-09-15** — Phase 2 done. `update` now classifies instead of
+  overwriting, and `update` / `update --force` genuinely differ.
+
+  Deviations and decisions worth recording:
+
+  - **The kept sections are named `customized — kept` and
+    `not recorded — kept`**, rather than the spec's `unknown — kept` for the
+    second. "Unknown" reads as a verdict about the file; "not recorded" names
+    the actual situation — nobody was recording — which is the distinction the
+    phase spends a page insisting on. The README says the same in prose.
+  - **A kept file carries its PRIOR manifest entry forward.** Not in the tasks,
+    and the feature is wrong without it: the entry records what *we* last wrote,
+    which a kept file does not change. Dropping it would downgrade every
+    customized file to "not recorded" on the following run, and the distinction
+    this phase exists to make would survive exactly one update.
+  - **`installScripts` no longer hardcodes `force: true`.** Its comment claimed
+    the generators "carry no user edits worth preserving", which nothing could
+    establish — and a consumer's extended `generate-releases.cjs` is precisely
+    the case the spec opens with. It now takes the same classification as every
+    other managed file, covered by its own test.
+  - **The CLI help was inaccurate and is fixed.** It advertised `update` as
+    "(overwrites)" and `--force` as "overwrite files that already exist", while
+    `update` overwrote everything with or without the flag. Both lines now
+    describe what the code does. That closes the `--force`-is-ambiguous report
+    as a side effect of this phase rather than as its own change.
+  - **README now leads with plain `update`**, not `update --force`, since the
+    forcing form is no longer the ordinary path.
+
+  The first-upgrade bluntness the phase warns about is real and documented
+  rather than worked around: with no manifest, everything is kept and little
+  changes until one `update --force` seeds it. Seeding from published tarball
+  hashes stays unbuilt — it is worth its own spec if the one-time `--force`
+  proves too blunt in practice.

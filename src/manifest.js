@@ -93,8 +93,38 @@ function manifestKey(relPath) {
   return relPath.split(path.sep).join('/')
 }
 
+/**
+ * Classify a managed file against what we last wrote.
+ *
+ * Named to match skitterspec's `managedState`, so a consumer with both packages
+ * installed does not meet two different answers to the same question.
+ *
+ *   'absent'     — not installed, or the consumer deleted it → write it
+ *   'identical'  — already byte-identical to the new asset   → nothing to do
+ *   'ours'       — matches the hash we recorded              → safe to overwrite
+ *   'customized' — differs from what we wrote                → KEEP
+ *   'unknown'    — nothing recorded, so we cannot tell       → KEEP
+ *
+ * 'unknown' is the case that must never be collapsed into 'ours'. A consumer
+ * installed before provenance shipped has no manifest, and one installed today
+ * has no entry for a file added next year — neither is evidence that the file
+ * is ours to replace. Being wrong toward keeping costs a stale file the
+ * consumer can re-take with --force; being wrong toward overwriting costs them
+ * work they cannot get back. See .claude/rules/negative-checks.md rule 4.
+ *
+ * 'identical' is checked BEFORE the hash so a consumer whose edit happens to
+ * match the new asset is reported as unchanged rather than accused of drifting.
+ */
+function managedState({ exists, onDisk, content, recorded }) {
+  if (!exists) return 'absent'
+  if (onDisk === content) return 'identical'
+  if (!recorded) return 'unknown'
+  return hashContent(onDisk) === recorded ? 'ours' : 'customized'
+}
+
 module.exports = {
   MANIFEST_FILE,
+  managedState,
   hashContent,
   manifestKey,
   manifestPath,

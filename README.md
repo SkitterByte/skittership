@@ -37,13 +37,50 @@ machine.
 ```sh
 npx @skitterbyte/skittership init          # interactive setup
 npx @skitterbyte/skittership init --yes     # accept defaults, non-interactive
-npx @skitterbyte/skittership update --force # re-sync skill/rule/scripts
+npx @skitterbyte/skittership update         # re-sync skill/rule/scripts, keeping your edits
 ```
 
 Non-interactive flags (drive setup in CI): `--changelog/--no-changelog`,
 `--releases/--no-releases`, `--changelog-file=NAME`, `--releases-file=NAME`,
 `--product-name=NAME`, `--version-hook/--no-version-hook`. See
 `skittership --help`.
+
+## Upgrading: what `update` keeps
+
+`update` re-copies the managed files, but it will not overwrite work you have
+done. Each file is compared against the manifest — the record of what the last
+install wrote — and routed by the answer:
+
+| Your file | What `update` does |
+|---|---|
+| matches what we last wrote | takes the new version (`updated`) |
+| differs from what we last wrote | **keeps yours**, lists it as `customized` |
+| has no manifest entry | **keeps yours**, lists it as `not recorded` |
+| is missing | writes it (`created`) |
+
+So a run that leaves things alone looks like this, and exits 0 — keeping a file
+is an expected outcome, not a failure:
+
+```
+customized — kept (re-run with --force to overwrite):
+  scripts/generate-releases.cjs
+  .claude/skills/commit/SKILL.md
+```
+
+To take the new version of a file it kept, either diff it against the shipped
+asset and re-apply your change on top, or run `update --force` and re-apply
+afterwards. `--force` overwrites everything, which is exactly what it is for.
+
+**`not recorded` is not an accusation.** It means nobody was recording — a
+project installed before the manifest existed, or a file added to skittership
+after your last install. It is kept for the same reason a customized file is:
+being wrong about it costs you a stale file, while the other mistake costs you
+work you cannot get back.
+
+**On your first upgrade to a version that has this**, there is no manifest yet,
+so everything lands in `not recorded — kept` and little actually changes. Run
+`update --force` once to take the new files and seed the manifest; from then on
+`update` can tell your edits from ours.
 
 ## Migrating from skitterspec
 

@@ -1,4 +1,6 @@
-# Phase 2 — Classify on update
+# ✅ Phase 2 — Classify on update
+
+> **Status:** Done
 
 **Goal:** `update` stops overwriting files the consumer edited. Each managed
 file is classified against the manifest and routed accordingly, with the
@@ -17,14 +19,14 @@ unknown case routed to inaction.
 
 ## Tasks
 
-- [ ] Stop `update` implying `force: true` in `src/cli.js`; pass the flag
+- [x] Stop `update` implying `force: true` in `src/cli.js`; pass the flag
       through so `update` and `update --force` differ.
-- [ ] Implement the table above in `writeFile()` (or a `managedState()` helper
+- [x] Implement the table above in `writeFile()` (or a `managedState()` helper
       beside it, mirroring skitterspec's naming so the two packages read alike).
-- [ ] Keep the existing "content identical to the new asset" short-circuit — a
+- [x] Keep the existing "content identical to the new asset" short-circuit — a
       consumer whose edit happens to match the new version is `skipped`, not
       `customized`.
-- [ ] Report kept files as a distinct section, with the remedy on the line:
+- [x] Report kept files as a distinct section, with the remedy on the line:
 
       ```
       customized — kept (re-run with --force to overwrite):
@@ -32,28 +34,28 @@ unknown case routed to inaction.
         .claude/skills/commit/SKILL.md
       ```
 
-- [ ] Exit 0 when files are kept. This is a normal, expected outcome — not a
+- [x] Exit 0 when files are kept. This is a normal, expected outcome — not a
       failure — and a non-zero exit here would break anyone running `update` in
       a scripted setup step.
-- [ ] Update the README: what `customized` means, why the file was kept, and how
+- [x] Update the README: what `customized` means, why the file was kept, and how
       to take the new version (diff it, re-apply your change, or `--force` and
       re-apply after).
 
 ## Tests
 
-- [ ] An edited managed file survives `update` and is reported as customized.
-- [ ] The same file IS overwritten under `update --force`.
-- [ ] An untouched managed file is overwritten by `update` (the ordinary
+- [x] An edited managed file survives `update` and is reported as customized.
+- [x] The same file IS overwritten under `update --force`.
+- [x] An untouched managed file is overwritten by `update` (the ordinary
       upgrade still works — this is the test that stops the feature from
       freezing every consumer at their installed version).
-- [ ] **Stays-silent:** a consumer with **no manifest** (the pre-2.x install, and
+- [x] **Stays-silent:** a consumer with **no manifest** (the pre-2.x install, and
       the common case on first upgrade) has nothing overwritten and nothing
       reported as customized — everything lands in `unknown — kept`, and the run
       exits 0 with instructions.
-- [ ] **Stays-silent:** a file the consumer deleted is re-created, not reported
+- [x] **Stays-silent:** a file the consumer deleted is re-created, not reported
       as an edit.
-- [ ] A file whose content already equals the new asset reports `skipped`.
-- [ ] Run `pnpm test`.
+- [x] A file whose content already equals the new asset reports `skipped`.
+- [x] Run `pnpm test`.
 
 ## Release note
 
