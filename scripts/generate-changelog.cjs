@@ -191,7 +191,12 @@ function updateChangelog(newVersion, options = {}) {
   }
 
   const categories = categorizeCommits(commits)
-  const date = new Date().toISOString().split('T')[0]
+  // Date the section by its TAG when the version is already tagged, not by
+  // today. Re-running a generator over a released version was silently
+  // re-stamping a shipped release with the current date. getTagDate falls back
+  // to today when the tag does not exist, which is the `npm version` path —
+  // the version being released has no tag yet, so that stays unchanged.
+  const date = getTagDate(`v${newVersion}`)
   const newSection = generateChangelogSection(newVersion, date, categories).trimEnd() + '\n'
 
   changelogContent = upsertSection(changelogContent, newSection, newVersion)

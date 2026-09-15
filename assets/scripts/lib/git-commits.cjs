@@ -95,13 +95,17 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       if (currentIndex + 1 < allTags.length) {
         previousTag = allTags[currentIndex + 1]
       } else {
-        // This is the OLDEST tag, get all commits
-        const output = execSync('git log --pretty=format:"%h%x00%s%x00%b%x00" --no-merges', {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-        }).trim()
+        // This is the OLDEST tag: everything up to and including it. Bound by
+        // the tag, NOT bare `git log` — when currentTag came from the version
+        // fallback, HEAD is past the tag, and an unbounded log folds work done
+        // AFTER the release into the released section. That is the same defect
+        // as the inverted walk, surviving in the single-tag case.
+        const output = execSync(
+          `git log ${currentTag} --pretty=format:"%h%x00%s%x00%b%x00" --no-merges`,
+          { encoding: 'utf-8', stdio: 'pipe' },
+        ).trim()
 
-        report('all history — no earlier tag')
+        report(`all history — no earlier tag (through ${currentTag})`)
         return reconstructCommits(output)
       }
     } else {

@@ -31,8 +31,9 @@ type(scope): subject
 - Be specific about what changed (file, module, feature)
 - No emojis, no trailing punctuation
 - No **authorship** trailers — `Co-authored-by`, `Signed-off-by`, etc.
-  (The `Release-Note:` footers below are the one permitted exception — they
-  carry content, not attribution.)
+  Content-carrying footers are fine: the `Release-Note:` footers below, plus
+  any your ticketing provider installs (e.g. `Refs:`). The ban is on
+  attribution, not on footers.
 - Commit with an explicit pathspec and no flags beyond `-m`:
   `git commit -m "message" -- <path> <path>`, naming the same paths you
   staged. Concurrent sessions share one `.git/index`, so the pathspec — not
