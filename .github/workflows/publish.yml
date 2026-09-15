@@ -20,7 +20,10 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
+      # Must precede setup-node: `cache: pnpm` below needs pnpm on PATH.
+      - uses: pnpm/action-setup@v6
 
       # Deliberately NO registry-url. Passing it makes setup-node write an
       # .npmrc containing `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}`,
@@ -28,9 +31,7 @@ jobs:
       # npm then treats the registry as token-authenticated, never performs the
       # OIDC exchange, and the registry rejects the anonymous PUT as a 404.
       # Trusted Publishing needs npm to find NO credentials at all.
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: pnpm
