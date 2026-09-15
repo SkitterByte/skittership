@@ -2,9 +2,9 @@
 
 > **Name:** feat-managed-file-upgrade-safety
 > **Type:** Feature
-> **Status:** Ready
+> **Status:** In Progress — Phase 1 (started 2026-09-15)
 > **Author:** Reuben Greaves
-> **Developer:** —
+> **Developer:** Reuben Greaves
 > **Raised:** 2026-09-15
 > **Area:** `src/init.js`, `src/config.js`, `src/cli.js`, `test/init.test.js`
 > **Stack:** worktree
@@ -128,6 +128,7 @@ migration that adds what is missing and preserves what is there.
 | Date | Status | Folder | By |
 |------|--------|--------|----|
 | 2026-09-15 | Ready | backlog | Reuben Greaves |
+| 2026-09-15 | In Progress | in-progress | Reuben Greaves |
 
 ## Changelog
 
