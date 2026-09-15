@@ -61,12 +61,27 @@ function parseArgs(argv) {
 }
 
 /**
- * Normalise `npm stage list --json` into {id, version} rows.
+ * Statuses that are KNOWN to mean "not approvable yet".
  *
- * The documented output shape is thin on field names, so rather than depend on
- * one spelling this accepts any of the obvious ones and, failing that, scans
- * the row for a UUID-shaped value. A listing we cannot parse is reported as
- * such — never silently treated as "nothing staged".
+ * Deliberately a list of known-bad rather than known-good. npm does not publish
+ * the full set, and blocking on an unrecognised status would leave a release
+ * that is perfectly ready un-approvable through this script. An unknown status
+ * therefore falls through to `npm stage approve`, which is the authority and
+ * will refuse if it must — the cost of being wrong that way is one 409, while
+ * the other way is a release nobody can ship.
+ */
+const NOT_READY = {
+  validating: 'npm is still running its automated review',
+}
+
+/**
+ * Normalise `npm stage list --json` into {id, version, status} rows.
+ *
+ * The real shape (verified against npm 11.x) is a flat array of
+ * `{ id, packageName, version, tag, createdAt, actor, access, shasum, status }`.
+ * The alternative spellings below are kept because the output is undocumented
+ * and cheap to tolerate; the UUID scan is the last resort. A listing we cannot
+ * parse is reported as such — never silently treated as "nothing staged".
  */
 function normaliseEntries(parsed) {
   let rows = parsed
@@ -90,9 +105,16 @@ function normaliseEntries(parsed) {
           version = spec.slice(spec.lastIndexOf('@') + 1)
         }
       }
-      return { id, version }
+      const status = typeof row.status === 'string' ? row.status : null
+      return { id, version, status }
     })
     .filter((row) => row.id)
+}
+
+/** The reason this row is not approvable yet, or null if it may be tried. */
+function notReadyReason(row) {
+  if (!row || typeof row.status !== 'string') return null
+  return NOT_READY[row.status.toLowerCase()] || null
 }
 
 function listStaged(name) {
@@ -155,6 +177,23 @@ function main(argv) {
       console.error(`\n  Pass the stage-id you want:  npm run approve <stage-id>\n`)
       process.exit(1)
     }
+    // Check readiness BEFORE approving. `npm stage approve` opens a browser for
+    // 2FA and only then asks the registry, so an un-reviewed release sends you
+    // off to authenticate and fails afterwards for a reason that had nothing to
+    // do with your credentials. Rejecting does not wait on review, so only gate
+    // the approve.
+    const reason = action === 'approve' ? notReadyReason(matches[0]) : null
+    if (reason) {
+      console.error(
+        `\n⏳ ${name}@${version} is not approvable yet — ${reason}.\n` +
+          `   status: ${matches[0].status}\n\n` +
+          `   This is normal for a fresh release, not a failure. Try again in a\n` +
+          `   few minutes; nothing needs re-staging and CI does not need re-running.\n` +
+          `   Check progress with:  npm run staged\n`,
+      )
+      process.exit(1)
+    }
+
     stageId = matches[0].id
   }
 
@@ -167,7 +206,15 @@ function main(argv) {
     // stdio must be inherited: the 2FA prompt needs the real terminal.
     execFileSync('npm', ['stage', action, stageId], { stdio: 'inherit' })
   } catch {
-    console.error(`\n✖ \`npm stage ${action} ${stageId}\` failed — see the error above.`)
+    // The status check above catches the usual case, but a stage-id passed
+    // directly skips it, and the status can go stale between listing and
+    // approving. A 409 here means "not yet", not "broken" — say so, because
+    // the raw error reads like a failed release.
+    console.error(
+      `\n✖ \`npm stage ${action} ${stageId}\` failed — see the error above.\n` +
+        `  If that was a 409 about automated review, it is not a failure:\n` +
+        `  wait a few minutes and re-run. Check with:  npm run staged\n`,
+    )
     process.exit(1)
   }
 
@@ -180,4 +227,4 @@ function main(argv) {
 
 if (require.main === module) main(process.argv)
 
-module.exports = { parseArgs, tooOld, normaliseEntries, UUID }
+module.exports = { parseArgs, tooOld, normaliseEntries, notReadyReason, NOT_READY, UUID }

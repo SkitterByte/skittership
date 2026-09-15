@@ -8,7 +8,7 @@ const { test } = require('node:test')
 const assert = require('node:assert')
 const path = require('node:path')
 
-const { parseArgs, tooOld, normaliseEntries, UUID } = require(
+const { parseArgs, tooOld, normaliseEntries, notReadyReason, UUID } = require(
   path.join(__dirname, '..', 'scripts', 'approve-release.cjs'),
 )
 
@@ -63,35 +63,36 @@ const ID_B = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
 test('normaliseEntries reads a plain array with id/version', () => {
   assert.deepStrictEqual(
     normaliseEntries([{ id: ID_A, version: '2.0.1' }]),
-    [{ id: ID_A, version: '2.0.1' }],
+    [{ id: ID_A, version: '2.0.1', status: null }],
   )
 })
 
 test('normaliseEntries accepts alternative id spellings', () => {
   assert.deepStrictEqual(normaliseEntries([{ stageId: ID_A, version: '1.0.0' }]), [
-    { id: ID_A, version: '1.0.0' },
+    { id: ID_A, version: '1.0.0', status: null },
   ])
   assert.deepStrictEqual(normaliseEntries([{ stage_id: ID_B, version: '1.0.0' }]), [
-    { id: ID_B, version: '1.0.0' },
+    { id: ID_B, version: '1.0.0', status: null },
   ])
 })
 
 test('normaliseEntries finds a UUID under an unexpected key', () => {
   assert.deepStrictEqual(normaliseEntries([{ someKey: ID_A, version: '2.0.1' }]), [
-    { id: ID_A, version: '2.0.1' },
+    { id: ID_A, version: '2.0.1', status: null },
   ])
 })
 
 test('normaliseEntries derives the version from a spec when absent', () => {
   assert.deepStrictEqual(normaliseEntries([{ id: ID_A, spec: '@scope/pkg@2.0.1' }]), [
-    { id: ID_A, version: '2.0.1' },
+    { id: ID_A, version: '2.0.1', status: null },
   ])
 })
 
 test('normaliseEntries unwraps a wrapper object', () => {
   const rows = [{ id: ID_A, version: '2.0.1' }]
-  assert.deepStrictEqual(normaliseEntries({ staged: rows }), rows)
-  assert.deepStrictEqual(normaliseEntries({ versions: rows }), rows)
+  const want = [{ id: ID_A, version: '2.0.1', status: null }]
+  assert.deepStrictEqual(normaliseEntries({ staged: rows }), want)
+  assert.deepStrictEqual(normaliseEntries({ versions: rows }), want)
 })
 
 test('normaliseEntries drops rows with no id rather than inventing one', () => {
@@ -104,4 +105,50 @@ test('UUID matches a stage-id and rejects a version string', () => {
   assert.ok(UUID.test(ID_A))
   assert.ok(!UUID.test('2.0.1'))
   assert.ok(!UUID.test('@skitterbyte/skittership@2.0.1'))
+})
+
+// --- readiness --------------------------------------------------------------
+
+// A fresh staged release sits in npm's automated malware review. Approving then
+// returns 409 — but only AFTER `npm stage approve` has opened a browser for
+// 2FA, so the failure looks like an auth problem when it is a timing one.
+// Checking the listing's status first turns that into a one-line "try again".
+
+// The real `npm stage list --json` output, captured from npm 11.x. The parser
+// used to be written against guessed field names; this pins it to the truth.
+const REAL_ROW = {
+  id: 'e7219fc0-2676-4498-888f-3cbd3b578963',
+  packageName: '@skitterbyte/skittership',
+  version: '2.0.3',
+  tag: 'latest',
+  createdAt: '2026-09-15T09:59:43.831Z',
+  actor: 'GitHub Actions',
+  actorType: 'trusted automation',
+  access: 'public',
+  shasum: '2406808890e4691ec8b3a760163cf2fba882b768',
+  status: 'validating',
+}
+
+test('normaliseEntries reads the real npm stage list --json shape', () => {
+  assert.deepStrictEqual(normaliseEntries([REAL_ROW]), [
+    { id: REAL_ROW.id, version: '2.0.3', status: 'validating' },
+  ])
+})
+
+test('a validating release is reported as not ready', () => {
+  const reason = notReadyReason({ status: 'validating' })
+  assert.ok(reason, 'validating is known to be un-approvable')
+  assert.match(reason, /review/i)
+  assert.strictEqual(notReadyReason({ status: 'VALIDATING' }), reason, 'case-insensitive')
+})
+
+// The bias that matters: an unrecognised status must NOT block. npm does not
+// publish the full set, and refusing on an unknown one would make a ready
+// release un-approvable through this script. Let it through and let the real
+// command be the authority.
+test('an unknown or absent status does not block the attempt', () => {
+  assert.strictEqual(notReadyReason({ status: 'some-future-state' }), null)
+  assert.strictEqual(notReadyReason({ status: 'ready' }), null)
+  assert.strictEqual(notReadyReason({}), null)
+  assert.strictEqual(notReadyReason(null), null)
 })
