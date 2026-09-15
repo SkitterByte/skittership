@@ -2,7 +2,7 @@
 
 > **Name:** feat-managed-file-upgrade-safety
 > **Type:** Feature
-> **Status:** In Progress — Phase 1 (started 2026-09-15)
+> **Status:** In Progress — Phase 2 next (started 2026-09-15)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-09-15
@@ -109,7 +109,7 @@ migration that adds what is missing and preserves what is there.
 
 | # | Phase | Status |
 |---|-------|--------|
-| 1 | [Stamp provenance](01-stamp-provenance.md) | ⬜ |
+| 1 | [Stamp provenance](01-stamp-provenance.md) | ✅ |
 | 2 | [Classify on update](02-classify-on-update.md) | ⬜ |
 | 3 | [Migrate the version hook](03-migrate-version-hook.md) | ⬜ |
 
@@ -137,3 +137,35 @@ migration that adds what is missing and preserves what is there.
   `ereqs` carried at the time, and the hotfix override in the first row would
   have failed silently on the next production hotfix. Full evidence in
   `docs/handoffs/skittership-tag-range-and-update-safety.md` in that repo.
+
+- **2026-09-15** — Phase 1 done. The manifest lands at
+  `.skittership-manifest.json` in the consumer root, resolving the first open
+  question in favour of root.
+
+  Three deviations from the written tasks, all deliberate:
+
+  - **The managed-file set is derived from the `copyAsset` funnel, not from a
+    re-declared list.** Every managed asset — skills, rules, generators, the
+    shared lib, the index guard — already passes through that one function, so
+    recording there is strictly stronger than deriving from `SHARED_LIB` +
+    `SKILLS` + `RULES`: a managed file added later cannot be omitted from the
+    manifest without also bypassing the installer. A parallel list could drift;
+    a choke point cannot.
+  - **`writeFile` now distinguishes `skipped` from `unchanged`, and records
+    both writes and `unchanged`.** The task said not to record skipped files,
+    and the reason given — "an entry for a file we did not write is exactly the
+    lie phase 2 would act on" — is about *claiming* something the run did not
+    establish. But `skipped` covered two different situations: a file that
+    exists and was never opened (`force: false`), and one compared byte-for-byte
+    and found identical to ours (`force: true`). Recording the second is not a
+    claim, it is an observation this run actually made, and dropping it would
+    lose provenance for every already-current file on an update. Only the
+    never-opened case goes unrecorded.
+  - **Tests live in `test/manifest.test.js`, not `test/init.test.js`.** They
+    cover the manifest module as well as init's use of it, and `init.test.js` is
+    already 14k.
+
+  The "absence is not evidence" comment the phase asked for is on `readManifest`,
+  covering both an absent manifest and a missing entry. `recordedHash` returns
+  null for a non-string entry too, so a hand-mangled manifest degrades to
+  "cannot tell" rather than throwing.

@@ -4,6 +4,16 @@ const fs = require('fs')
 const path = require('path')
 
 const { loadConfig, SCHEMA_VERSION } = require('./config.js')
+const {
+  hashContent,
+  manifestKey,
+  readManifest,
+  writeManifest,
+} = require('./manifest.js')
+
+// The installing package's OWN version — never the consumer's config, which
+// records a schema version and would happily claim whatever it last said.
+const PKG_VERSION = require('../package.json').version
 
 const ASSETS = path.join(__dirname, '..', 'assets')
 
@@ -44,6 +54,12 @@ const SPEC_MARKER_END = '<!-- skittership:end -->'
 
 const report = { created: [], updated: [], skipped: [], removed: [], warnings: [] }
 
+// Hashes recorded during THIS run, keyed by consumer-relative path. Populated
+// as each managed file is written rather than by a second pass over the tree
+// afterwards: a later pass can only hash what is on disk by then, which may be
+// something another process wrote in between.
+const manifestFiles = {}
+
 function rel(dir, p) {
   return path.relative(dir, p) || '.'
 }
@@ -52,29 +68,43 @@ function ensureDir(p) {
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true })
 }
 
+// Returns what happened, so copyAsset can tell the three apart:
+//   'created' / 'updated'  — we wrote these bytes
+//   'unchanged'            — already byte-identical to ours (we compared)
+//   'skipped'              — it exists and we did NOT look at it
+// Only the first three are provenance. 'skipped' means we never compared, so
+// recording a hash for it would assert something this run did not establish.
 function writeFile(dir, target, content, { force }) {
   if (fs.existsSync(target)) {
     if (!force) {
       report.skipped.push(rel(dir, target))
-      return
+      return 'skipped'
     }
     const existing = fs.readFileSync(target, 'utf8')
     if (existing === content) {
       report.skipped.push(rel(dir, target))
-      return
+      return 'unchanged'
     }
     fs.writeFileSync(target, content)
     report.updated.push(rel(dir, target))
-    return
+    return 'updated'
   }
   ensureDir(path.dirname(target))
   fs.writeFileSync(target, content)
   report.created.push(rel(dir, target))
+  return 'created'
 }
 
 function copyAsset(dir, assetRelPath, targetAbs, opts) {
   const content = fs.readFileSync(path.join(ASSETS, assetRelPath), 'utf8')
-  writeFile(dir, targetAbs, content, opts)
+  const outcome = writeFile(dir, targetAbs, content, opts)
+  // Record provenance only for files this run actually established: ones we
+  // wrote, and ones we compared and found identical. A 'skipped' file was never
+  // opened, so claiming its hash would be the exact lie phase 2 would act on.
+  if (outcome !== 'skipped') {
+    manifestFiles[manifestKey(rel(dir, targetAbs))] = hashContent(content)
+  }
+  return outcome
 }
 
 function installSkills(dir, opts) {
@@ -291,13 +321,18 @@ function wireVersionHook(dir, release, { force }) {
   }
 }
 
-function printReport(dir, mode, migration) {
+function printReport(dir, mode, migration, versions) {
   const line = (label, items) => {
     if (!items.length) return
     process.stdout.write(`\n${label}:\n`)
     for (const it of items) process.stdout.write(`  ${it}\n`)
   }
-  process.stdout.write(`\nskittership ${mode} → ${dir}\n`)
+  // Name the transition when we know it. A consumer upgrading from before
+  // provenance shipped has no prior version to show — say the new one plainly
+  // rather than inventing a "from".
+  const from = versions && versions.from
+  const stamp = from && from !== PKG_VERSION ? `${from} → ${PKG_VERSION}` : PKG_VERSION
+  process.stdout.write(`\nskittership ${mode} ${stamp} → ${dir}\n`)
   if (migration && migration.migrated) {
     process.stdout.write(`\nmigrated: ${migration.from} → ${migration.to}\n`)
   }
@@ -325,6 +360,11 @@ async function init({ dir, force, claudeMd, mode, release }) {
   report.skipped.length = 0
   report.removed.length = 0
   report.warnings.length = 0
+  for (const key of Object.keys(manifestFiles)) delete manifestFiles[key]
+
+  // Read BEFORE anything is written: once the run starts replacing files the
+  // prior manifest is gone, and with it the only record of where we came from.
+  const priorManifest = readManifest(dir)
 
   // Migrate a legacy config first so both direct callers and the CLI resolve
   // release settings from the carried-over file (idempotent — CLI runs it too).
@@ -347,11 +387,18 @@ async function init({ dir, force, claudeMd, mode, release }) {
   // script unless --force; `update` always passes force.
   if (rel.versionHook) wireVersionHook(dir, rel, { force })
 
-  printReport(dir, mode, migration)
+  // Stamp provenance last, so it describes a completed run rather than a
+  // partial one that threw halfway through.
+  writeManifest(dir, { installedVersion: PKG_VERSION, files: { ...manifestFiles } })
+
+  printReport(dir, mode, migration, {
+    from: priorManifest && priorManifest.installedVersion,
+  })
 }
 
 module.exports = {
   init,
+  PKG_VERSION,
   SKILLS,
   RULES,
   releaseFromConfig,

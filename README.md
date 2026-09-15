@@ -19,6 +19,18 @@ you can adopt release tooling without the spec workflow (and vice versa).
 | `scripts/lib/` | Shared, zero-dependency git/config helpers |
 | `skittership.config.json` | Filenames, product name, scope→area map, feature toggles |
 | `package.json` `version` hook | Regenerates both artifacts at `npm version` (opt-in) |
+| `.skittership-manifest.json` | Records the installing version and a hash per managed file — **commit it** (see below) |
+
+### Commit `.skittership-manifest.json`
+
+It is not a lockfile or a cache, and it does not belong in `.gitignore`. It
+records the version that installed your managed files and a hash of each one, so
+a later `update` can tell a file you edited from an old copy of ours and keep
+your edits instead of overwriting them.
+
+That only works if the record travels with the repo. Ignore it and every
+collaborator's `update` is back to guessing — including yours on another
+machine.
 
 ## Install
 
