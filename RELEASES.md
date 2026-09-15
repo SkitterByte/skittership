@@ -5,6 +5,11 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.0.4 — 15 Sep 2026
+
+### Installer
+- **New** — Upgrading now explains itself. When skittership keeps every managed file because it has no record of what it last wrote — which is what happens the first time you upgrade to a version that keeps one — it now says so and tells you how to take the new files safely, instead of leaving a run that looks like it did nothing. The guidance is also in the notes installed into your project.
+
 ## 2.0.3 — 15 Sep 2026
 
 ### General

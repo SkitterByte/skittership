@@ -1,6 +1,6 @@
 {
   "name": "@skitterbyte/skittership",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Changelog + user-facing release-notes tooling for Claude Code — installs the /commit skill, commit-message rule, and release-artifact generators into any project.",
   "keywords": [
     "claude",
