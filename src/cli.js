@@ -125,9 +125,16 @@ async function run(argv) {
       await init({ dir, force: opts.force, claudeMd: opts.claudeMd, mode: 'init', release })
       break
     }
-    case 'update':
-      await init({ dir, force: true, claudeMd: opts.claudeMd, mode: 'update' })
+    case 'update': {
+      // Resolve the release config here too. Omitting it meant flags like
+      // --no-version-hook were parsed and then silently discarded: init fell
+      // back to the config and wired the hook anyway, with force: true. A
+      // documented command doing the opposite of what it was asked is worse
+      // than one that refuses.
+      const release = resolveRelease(loadConfig(dir), opts)
+      await init({ dir, force: true, claudeMd: opts.claudeMd, mode: 'update', release })
       break
+    }
     default:
       throw new Error(`unknown command: ${cmd} (try --help)`)
   }

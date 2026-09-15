@@ -72,13 +72,23 @@ function getCommitsSinceLastTag(currentVersion) {
     }
 
     if (currentTag && allTags.includes(currentTag)) {
-      // HEAD is at a tag - find the previous tag
+      // HEAD is at a tag - find the next OLDER tag.
+      //
+      // allTags is NEWEST-first (`--sort=-version:refname`), so the older
+      // neighbour is at +1. This read -1, which is the NEWER tag, and broke
+      // two ways at once: `git log newer..older` is a backwards range that
+      // returns nothing, and the newest tag (index 0) failed the `> 0` guard
+      // and fell through to "first tag", returning all history.
+      //
+      // `npm version` never reaches this branch — the version being released
+      // has no tag yet, so it takes the else below — which is why it survived.
+      // The documented manual path (`npm run changelog` between releases) is
+      // what it broke, silently and with exit 0.
       const currentIndex = allTags.indexOf(currentTag)
-      if (currentIndex > 0) {
-        // There is a previous tag
-        previousTag = allTags[currentIndex - 1]
+      if (currentIndex + 1 < allTags.length) {
+        previousTag = allTags[currentIndex + 1]
       } else {
-        // This is the first tag, get all commits
+        // This is the OLDEST tag, get all commits
         const output = execSync('git log --pretty=format:"%h%x00%s%x00%b%x00" --no-merges', {
           encoding: 'utf-8',
           stdio: 'pipe',
