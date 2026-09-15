@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2026-09-15
+
+### Added
+- **init**: migrate the version hook in place
+- **init**: keep managed files you have edited
+- **init**: record what each install wrote
+- **scripts**: report the commit range a generator used
+
+### Fixed
+- **scripts**: stop rewriting released sections
+- correct tag range and honour update release flags
+
 ## [2.0.2] - 2026-09-15
 
 ### Added

@@ -5,6 +5,20 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.0.3 — 15 Sep 2026
+
+### General
+- **Fixed** — Generating a changelog or release notes between releases now covers the right commits. Standing on a release tag previously rewrote that section with your entire history, and standing on an older tag produced nothing at all. Running skittership update also now respects --no-version-hook instead of wiring the hook regardless.
+
+### Installer
+- **New** — Upgrading now adds any missing step to your version script rather than replacing the whole thing, so a release hook you have customised keeps working across upgrades. If a step is missing from the middle, or the safety check is out of position, skittership tells you and leaves the script alone rather than rewriting it.
+- **New** — Upgrading skittership no longer overwrites managed files you have edited. Running skittership update now tells the difference between its own older copy and your changes, keeps yours, and lists what it left alone — re-run with --force to take the new version anyway. On your first upgrade nothing is recorded yet, so run it once with --force to take the new files and start the record.
+- **New** — You can now tell which version of skittership installed your files. Every install and update records the installing version and a fingerprint of each file it wrote, and the run reports the version it upgraded you from. Commit the new .skittership-manifest.json — a later update uses it to tell your edits from an old copy of ours.
+
+### Release tooling
+- **New** — Changelog and release-notes generation now prints the commit range it used, so a run that covers the wrong span is obvious at a glance instead of only showing up in the diff.
+- **Fixed** — Regenerating a changelog or release notes no longer damages an already-released section. It previously re-dated a shipped release to today and could fold in work done after that release; both are fixed, and the commit-message rule now accepts a Refs: trailer from your ticketing provider rather than forbidding it.
+
 ## 2.0.2 — 15 Sep 2026
 
 ### Release tooling
