@@ -2,7 +2,7 @@
 
 > **Name:** feat-managed-file-upgrade-safety
 > **Type:** Feature
-> **Status:** In Progress — all phases done, ready for /spec-complete
+> **Status:** Complete (2026-09-15)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-09-15
@@ -129,6 +129,7 @@ migration that adds what is missing and preserves what is there.
 |------|--------|--------|----|
 | 2026-09-15 | Ready | backlog | Reuben Greaves |
 | 2026-09-15 | In Progress | in-progress | Reuben Greaves |
+| 2026-09-15 | Complete | complete | Reuben Greaves |
 
 ## Changelog
 
@@ -228,3 +229,25 @@ migration that adds what is missing and preserves what is there.
   the guard NOT last. Silently reordering a release-critical script is exactly
   what this phase argues against, so it warns and changes nothing, same as a
   missing step.
+
+- **2026-09-15** — Completed; all three phases done, 163 tests green (130 at the
+  branch point). Verified rather than assumed: every phase task re-checked
+  against the code, and the impact map's `assets/**: None` claim confirmed by
+  diffing the branch — no shipped asset changed, so this release alters the
+  installer's behaviour without altering a single file it installs.
+
+  **Deferred, deliberately, and not done here:**
+
+  - **Seeding the manifest from published tarball hashes.** Without it the first
+    upgrade to a manifest-aware version keeps everything and changes little
+    until one `update --force`. Documented in the README rather than solved;
+    worth its own spec if that proves too blunt in practice.
+  - **`update --dry-run`**, raised as an open question. It falls out of the
+    classification for almost nothing, but it was not scheduled and nothing here
+    needs it.
+  - **Separating the changelog/releases helper scripts from the version hook.**
+    Declining the hook with `--no-version-hook` currently also skips the helper
+    scripts, because both are written inside `wireVersionHook` — even though
+    `npm run changelog` is a documented manual path that does not need the hook.
+    Noted in a test comment in `test/update-flags.test.js` and left alone: it is
+    a real wart, but it is not this spec's subject.
