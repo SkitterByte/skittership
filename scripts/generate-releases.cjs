@@ -262,7 +262,11 @@ function updateReleases(newVersion, options = {}) {
   const header = defaultReleasesHeader(productName, changelogFile)
   let content = readReleases(releasesPath, header)
 
-  const notes = notesFor(getCommitsSinceLastTag(newVersion), scopeAreas)
+  let range = 'unknown range'
+  const notes = notesFor(
+    getCommitsSinceLastTag(newVersion, { onRange: (r) => (range = r) }),
+    scopeAreas,
+  )
   if (notes.length === 0) {
     console.log(`No Release-Note footers found since last tag — skipping ${file} update`)
     // Ensure the artifact exists so a version hook's downstream steps have a
@@ -276,7 +280,7 @@ function updateReleases(newVersion, options = {}) {
   content = upsertReleasesSection(content, section, newVersion)
 
   writeFileSync(releasesPath, content, 'utf-8')
-  console.log(`✅ Updated ${file} with version ${newVersion} (${notes.length} note(s))`)
+  console.log(`✅ Updated ${file} with version ${newVersion} (${notes.length} note(s), ${range})`)
 }
 
 function retroFillReleases(count, options = {}) {

@@ -18,7 +18,13 @@
 
 const { execSync } = require('node:child_process')
 
-function getCommitsSinceLastTag(currentVersion) {
+function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
+  // The range is reported through a callback rather than a new return shape:
+  // a wrong range and a right range both printed the same success line, which
+  // is how an inverted index lived in a released package across versions.
+  const report = (range) => {
+    if (typeof onRange === 'function') onRange(range)
+  }
   try {
     // Fetch tags to ensure they're available (important in CI)
     try {
@@ -47,6 +53,7 @@ function getCommitsSinceLastTag(currentVersion) {
         stdio: 'pipe',
       }).trim()
 
+      report('all history — no tags')
       return reconstructCommits(output)
     }
 
@@ -94,6 +101,7 @@ function getCommitsSinceLastTag(currentVersion) {
           stdio: 'pipe',
         }).trim()
 
+        report('all history — no earlier tag')
         return reconstructCommits(output)
       }
     } else {
@@ -108,12 +116,14 @@ function getCommitsSinceLastTag(currentVersion) {
         stdio: 'pipe',
       }).trim()
 
+      report('all history — no earlier tag')
       return reconstructCommits(output)
     }
 
     // When HEAD is at a tag, use the tag explicitly instead of HEAD
     // This ensures we get commits up to and including the tag commit
     const rangeEnd = currentTag || 'HEAD'
+    report(`${previousTag}..${rangeEnd}`)
 
     // Get commits since previous tag (inclusive of rangeEnd)
     // Use null character as delimiter to handle multi-line bodies
@@ -152,6 +162,9 @@ function getCommitsSinceLastTag(currentVersion) {
         stdio: 'pipe',
       }).trim()
 
+      // Worth naming loudly: this is the whole history because git ERRORED,
+      // not because the range said so.
+      report('all history — git failed, fell back')
       return reconstructCommits(output)
     } catch {
       console.error('Failed to get git commits:', error)

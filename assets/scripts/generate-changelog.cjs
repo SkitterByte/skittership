@@ -181,7 +181,8 @@ function updateChangelog(newVersion, options = {}) {
   const changelogPath = join(process.cwd(), file)
   let changelogContent = readChangelog(changelogPath)
 
-  const commitLines = getCommitsSinceLastTag(newVersion)
+  let range = 'unknown range'
+  const commitLines = getCommitsSinceLastTag(newVersion, { onRange: (r) => (range = r) })
   const commits = commitLines.map(parseCommit).filter((commit) => commit !== null)
 
   if (commits.length === 0) {
@@ -196,7 +197,7 @@ function updateChangelog(newVersion, options = {}) {
   changelogContent = upsertSection(changelogContent, newSection, newVersion)
 
   writeFileSync(changelogPath, changelogContent, 'utf-8')
-  console.log(`✅ Updated ${file} with version ${newVersion}`)
+  console.log(`✅ Updated ${file} with version ${newVersion} (${range})`)
 }
 
 function retroFillChangelog(count, options = {}) {
