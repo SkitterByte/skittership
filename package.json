@@ -14,7 +14,7 @@
   "license": "MIT",
   "author": "Reuben Greaves",
   "type": "commonjs",
-  "packageManager": "pnpm@11.11.0",
+  "packageManager": "pnpm@12.4.2",
   "bin": {
     "skittership": "bin/skittership.js"
   },

@@ -32,7 +32,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -44,8 +44,11 @@ jobs:
       # release has been seen to work.
       #
       # Staged publishing needs npm >= 11.15.0 (trusted publishing alone needs
-      # only 11.5.1); Node 22 still bundles npm 10.x. node-version '22' resolves
-      # to the latest 22.x, comfortably above the required 22.14.0.
+      # only 11.5.1), and the bundled npm always lags that, so upgrade rather
+      # than relying on whatever the Node image ships. Node is pinned to 24 —
+      # the LTS line, and the version pnpm 12 has actually been verified on
+      # here; pnpm's own `engines` field disagrees with itself across majors,
+      # so it is not a safe thing to infer the floor from.
       - name: Upgrade npm
         run: npm install -g npm@latest
 
