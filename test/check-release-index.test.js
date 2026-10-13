@@ -104,3 +104,74 @@ test('the guard exits zero on a clean index', () => {
   const { dir } = tmpRepo()
   execFileSync('node', [GUARD], { cwd: dir, encoding: 'utf8' })
 })
+
+// --- the version being released is already tagged ---------------------------
+//
+// After a hotfix, main's package.json still names the pre-hotfix version, so
+// `npm version patch` computes the hotfix's own version. It regenerated both
+// files, committed, and only then failed on the existing tag — leaving a
+// version commit with no tag. The guard runs before npm commits, so it refuses
+// there instead.
+
+const runGuard = (dir, env) => {
+  try {
+    const stdout = execFileSync('node', [GUARD], {
+      cwd: dir,
+      encoding: 'utf8',
+      stdio: 'pipe',
+      env: { ...process.env, npm_lifecycle_event: 'version', ...env },
+    })
+    return { code: 0, stdout, stderr: '' }
+  } catch (err) {
+    return { code: err.status, stdout: err.stdout, stderr: err.stderr }
+  }
+}
+
+const bumpTo = (dir, version) =>
+  fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ name: 't', version }))
+
+test('the guard refuses a version whose tag already exists, naming it', () => {
+  const { dir, git } = tmpRepo()
+  git('tag', 'v1.0.0')
+  git('tag', 'v1.0.1') // the hotfix, cut elsewhere
+  bumpTo(dir, '1.0.1') // npm version patch on main, still at 1.0.0
+  const { code, stderr } = runGuard(dir)
+  assert.strictEqual(code, 1, 'exits 1')
+  assert.match(stderr, /v1\.0\.1/)
+  assert.match(stderr, /npm version 1\.0\.2/, 'suggests the next free patch')
+})
+
+test('the suggested patch skips every tag already taken', () => {
+  const { dir, git } = tmpRepo()
+  for (const t of ['v1.0.0', 'v1.0.1', 'v1.0.2', 'v1.1.0']) git('tag', t)
+  bumpTo(dir, '1.0.1')
+  assert.match(runGuard(dir).stderr, /npm version 1\.0\.3\b/)
+})
+
+test('the guard stays silent on a normal release whose tag does not exist', () => {
+  const { dir, git } = tmpRepo()
+  git('tag', 'v1.0.0')
+  bumpTo(dir, '1.0.1')
+  const { code, stderr } = runGuard(dir)
+  assert.strictEqual(code, 0)
+  assert.strictEqual(stderr, '')
+})
+
+// Outside the version lifecycle package.json names the RELEASED version, whose
+// tag exists by definition. That is not a collision.
+test('the guard stays silent outside npm version, where the tag is expected', () => {
+  const { dir, git } = tmpRepo()
+  git('tag', 'v1.0.0')
+  const { code, stderr } = runGuard(dir, { npm_lifecycle_event: '' })
+  assert.strictEqual(code, 0)
+  assert.strictEqual(stderr, '')
+})
+
+test('the guard honours a custom tag-version-prefix', () => {
+  const { dir, git } = tmpRepo()
+  git('tag', 'release-1.0.1')
+  bumpTo(dir, '1.0.1')
+  const { code, stderr } = runGuard(dir, { npm_config_tag_version_prefix: 'release-' })
+  assert.strictEqual(code, 1)
+  assert.match(stderr, /release-1\.0\.1/)
+})

@@ -20,6 +20,7 @@
  */
 
 const { execFileSync } = require('node:child_process')
+const fs = require('node:fs')
 const path = require('node:path')
 
 const { loadConfig } = require(path.join(__dirname, 'lib', 'config.cjs'))
@@ -62,8 +63,70 @@ function findStrays(dir) {
   return stagedPaths(dir).filter((p) => !expected.has(p))
 }
 
+/**
+ * The tag `npm version` is about to create, when it already exists.
+ *
+ * After a hotfix, main's package.json still names the pre-hotfix version, so
+ * `npm version patch` there computes the hotfix's own version. npm regenerated
+ * both files, committed, and only THEN failed on the tag — leaving a version
+ * commit with no tag. This runs before npm commits, so it can refuse first.
+ *
+ * Only inside the `version` lifecycle. Anywhere else package.json names the
+ * version already released, whose tag exists by definition — not a collision.
+ *
+ * Its blind spot: a tag that exists only on the remote. The generators earlier
+ * in the hook fetch tags, but a failed fetch leaves it unseen, and the release
+ * fails late exactly as before. An unseen tag never blocks a release.
+ */
+function existingVersionTag(dir, env = process.env) {
+  if (env.npm_lifecycle_event !== 'version') return null
+  const prefix = env.npm_config_tag_version_prefix ?? 'v'
+  let version
+  try {
+    ;({ version } = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')))
+  } catch {
+    return null // cannot tell — let npm's own tag step be the judge
+  }
+  if (typeof version !== 'string') return null
+  const tag = `${prefix}${version}`
+  return tagNames(dir).includes(tag) ? { tag, version, prefix } : null
+}
+
+function tagNames(dir) {
+  return execFileSync('git', ['tag', '--list'], { cwd: dir, encoding: 'utf8' })
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/** The lowest patch above `version` in the same major.minor with no tag. */
+function nextFreePatch(dir, version, prefix) {
+  const [major, minor, patch] = version.split('.').map((n) => Number.parseInt(n, 10))
+  const taken = new Set(tagNames(dir))
+  let next = patch + 1
+  while (taken.has(`${prefix}${major}.${minor}.${next}`)) next += 1
+  return `${major}.${minor}.${next}`
+}
+
 function main() {
   const dir = process.cwd()
+
+  const collision = existingVersionTag(dir)
+  if (collision) {
+    const { tag, version, prefix } = collision
+    console.error(`\n✖ Release aborted — tag ${tag} already exists.\n`)
+    console.error(
+      `  package.json was bumped to ${version}, but that version was already\n` +
+        '  released — usually as a hotfix cut from a release branch, which\n' +
+        "  leaves this branch's package.json behind. Nothing has been committed\n" +
+        '  or tagged.\n' +
+        '\n  Undo the bump and release the next free version instead:\n' +
+        `\n    git checkout HEAD -- ${[...expectedPaths(dir)].filter((p) => fs.existsSync(path.join(dir, p))).join(' ')}\n` +
+        `    npm version ${nextFreePatch(dir, version, prefix)}\n`,
+    )
+    process.exit(1)
+  }
+
   const strays = findStrays(dir)
   if (strays.length === 0) return
 
@@ -81,4 +144,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { expectedPaths, stagedPaths, findStrays, LOCKFILES }
+module.exports = { expectedPaths, stagedPaths, findStrays, existingVersionTag, nextFreePatch, LOCKFILES }
