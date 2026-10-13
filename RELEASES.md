@@ -5,6 +5,12 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.0.7 — 13 Oct 2026
+
+### Release tooling
+- **Fixed** — Bumping to a version that is already tagged, as happens on main after a hotfix, now stops before anything is committed and tells you the next free version to use. It previously left behind a version commit with no tag.
+- **Fixed** — The first release after a hotfix no longer lists the hotfix's changes a second time in your changelog and release notes. If you have edited your copy of lib/git-commits.cjs, merge this change into it rather than overwriting it.
+
 ## 2.0.5 — 15 Sep 2026
 
 ### Release tooling
