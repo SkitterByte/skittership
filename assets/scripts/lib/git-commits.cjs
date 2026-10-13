@@ -127,7 +127,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
     // When HEAD is at a tag, use the tag explicitly instead of HEAD
     // This ensures we get commits up to and including the tag commit
     const rangeEnd = currentTag || 'HEAD'
-    report(`${previousTag}..${rangeEnd}`)
+    report(describeRange(previousTag, rangeEnd))
 
     // Get commits since previous tag (inclusive of rangeEnd)
     // Use null character as delimiter to handle multi-line bodies
@@ -135,10 +135,10 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
     // NOTE: do NOT pass --all here — it traverses every ref (branches,
     // remotes, tags) and leaks commits from unmerged branches into the
     // range. Shallow-clone fallback below uses git fetch --unshallow.
-    const output = execSync(
-      `git log ${previousTag}..${rangeEnd} --pretty=format:"%h%x00%s%x00%b%x00" --no-merges`,
-      { encoding: 'utf-8', stdio: 'pipe' },
-    ).trim()
+    const output = execSync(`git log ${rangeSince(previousTag, rangeEnd)} ${FORMAT}`, {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    }).trim()
 
     const commits = reconstructCommits(output)
 
@@ -147,10 +147,10 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       try {
         execSync('git fetch --unshallow', { encoding: 'utf-8', stdio: 'pipe' })
         // Try again after unshallow
-        const retryOutput = execSync(
-          `git log ${previousTag}..${rangeEnd} --pretty=format:"%h%x00%s%x00%b%x00" --no-merges`,
-          { encoding: 'utf-8', stdio: 'pipe' },
-        ).trim()
+        const retryOutput = execSync(`git log ${rangeSince(previousTag, rangeEnd)} ${FORMAT}`, {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        }).trim()
         return reconstructCommits(retryOutput)
       } catch {
         // Unshallow failed or not a shallow clone, return empty
@@ -174,6 +174,45 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       console.error('Failed to get git commits:', error)
       return []
     }
+  }
+}
+
+const FORMAT = '--pretty=format:"%h%x00%s%x00%b%x00" --no-merges'
+
+/**
+ * The commits in `to` that `from` does not already carry — as a `git log`
+ * range argument.
+ *
+ * Not `from..to`. That excludes only commits REACHABLE from `from`, and after a
+ * hotfix the previous tag is not: it was cut on a branch from an older release,
+ * and its fixes reached main as cherry-picks with different SHAs. `from..to`
+ * listed those copies a second time, Release-Note footers and all.
+ *
+ * `--cherry-pick --right-only from...to` drops right-side commits whose patch
+ * matches one on the left. When `from` is an ancestor of `to` — every ordinary
+ * release — the left side is empty and the result is the same as `from..to`.
+ *
+ * Its blind spot: a cherry-pick that needed conflict resolution has a
+ * different patch, so it is not recognised and is still listed. That fails
+ * toward listing a commit twice, never toward dropping one.
+ */
+function rangeSince(from, to) {
+  return `--cherry-pick --right-only ${from}...${to}`
+}
+
+/**
+ * The range as a reader should see it. The linear case keeps the familiar
+ * `from..to`, which is exactly what it computes; the hotfix case says that it
+ * is different, so a dropped commit is never silent.
+ */
+function describeRange(from, to) {
+  try {
+    execSync(`git merge-base --is-ancestor ${from} ${to}`, { stdio: 'pipe' })
+    return `${from}..${to}`
+  } catch {
+    // Not an ancestor — or git could not tell. Either way the three-dot form
+    // is what actually ran, so name it.
+    return `${from}...${to} (cherry-picks already in ${from} dropped)`
   }
 }
 
@@ -261,8 +300,8 @@ function getAllVersionTags() {
 }
 
 function getCommitsBetween(fromTag, toTag) {
-  const range = fromTag ? `${fromTag}..${toTag}` : toTag
-  const output = execSync(`git log ${range} --pretty=format:"%h%x00%s%x00%b%x00" --no-merges`, {
+  const range = fromTag ? rangeSince(fromTag, toTag) : toTag
+  const output = execSync(`git log ${range} ${FORMAT}`, {
     encoding: 'utf-8',
     stdio: 'pipe',
   }).trim()
@@ -288,7 +327,7 @@ function tagExists(tag) {
  */
 function countCommitsSince(tag) {
   try {
-    const out = execSync(`git rev-list --count --no-merges ${tag}..HEAD`, {
+    const out = execSync(`git rev-list --count --no-merges ${rangeSince(tag, 'HEAD')}`, {
       encoding: 'utf-8',
       stdio: 'pipe',
     }).trim()
