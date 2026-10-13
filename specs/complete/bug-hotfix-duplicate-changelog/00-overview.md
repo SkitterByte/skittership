@@ -2,7 +2,7 @@
 
 > **Type:** Bug
 > **Name:** bug-hotfix-duplicate-changelog
-> **Status:** In Progress — fixed (green), release pending
+> **Status:** Complete (2026-10-13)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-10-12
@@ -53,7 +53,7 @@ exited 0 (`actual: 0, expected: 1`).
       free patch; no auto-bump
 - [x] Failing tests now pass; `pnpm test` 183/183; old and new ranges are
       byte-identical over every tag pair in this repo
-- [ ] Patch release, with a changelog note that consumers who edited their
+- [ ] *(Deferred — follows the landing)* Patch release, with a changelog note that consumers who edited their
       copy of `git-commits.cjs` have to merge rather than overwrite
 
 ## Impact
@@ -68,6 +68,7 @@ exited 0 (`actual: 0, expected: 1`).
 | Date | Status | Folder | By |
 |------|--------|--------|----|
 | 2026-10-12 | In Progress | in-progress | Reuben Greaves |
+| 2026-10-13 | Complete | complete | Reuben Greaves |
 
 ## Changelog
 
@@ -79,3 +80,6 @@ exited 0 (`actual: 0, expected: 1`).
   resolution has a different patch-id, so it is still listed (fails toward a
   duplicate, never a drop). The consumer's `baseTag` override is not
   upstreamed here.
+- 2026-10-13 — Completed; fix done, tests green. Deferred: the patch
+  release, which can only be cut from main after this lands; the
+  consumer note is already in the commit's Release-Note footer.
