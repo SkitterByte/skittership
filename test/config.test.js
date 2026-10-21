@@ -6,7 +6,13 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
-const { loadConfig, DEFAULT_CONFIG, SCHEMA_VERSION, CONFIG_FILE } = require('../src/config.js')
+const {
+  loadConfig,
+  DEFAULT_CONFIG,
+  DEFAULT_EMPTY_RELEASE,
+  SCHEMA_VERSION,
+  CONFIG_FILE,
+} = require('../src/config.js')
 
 function tmpDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'skittership-cfg-'))
@@ -25,6 +31,7 @@ test('returns defaults when no config file is present', () => {
   assert.strictEqual(cfg.releases.enabled, true)
   assert.strictEqual(cfg.releases.file, 'RELEASES.md')
   assert.deepStrictEqual(cfg.releases.scopeAreas, {})
+  assert.strictEqual(cfg.releases.emptyRelease, DEFAULT_EMPTY_RELEASE)
   assert.strictEqual(cfg.versionHook, true)
   assert.deepStrictEqual(cfg.hotfix, { branchPrefix: 'hotfix/' })
 })
@@ -35,6 +42,24 @@ test('hotfix.branchPrefix merges over the default, and a blank one is ignored', 
   assert.strictEqual(loadConfig(dir).hotfix.branchPrefix, 'release/')
   writeConfig(dir, { hotfix: { branchPrefix: '  ' } })
   assert.strictEqual(loadConfig(dir).hotfix.branchPrefix, 'hotfix/')
+})
+
+test('releases.emptyRelease: a string is the text, false turns it off', () => {
+  const dir = tmpDir()
+  writeConfig(dir, { releases: { emptyRelease: '  Maintenance only.  ' } })
+  assert.strictEqual(loadConfig(dir).releases.emptyRelease, 'Maintenance only.')
+  writeConfig(dir, { releases: { emptyRelease: false } })
+  assert.strictEqual(loadConfig(dir).releases.emptyRelease, null)
+})
+
+// Only an explicit false may turn the placeholder off: anything else unusable
+// keeps the default rather than quietly reopening the gap.
+test('releases.emptyRelease: true, blank or malformed keeps the default text', () => {
+  const dir = tmpDir()
+  for (const emptyRelease of [true, '   ', 0, null, ['x'], { text: 'x' }]) {
+    writeConfig(dir, { releases: { emptyRelease } })
+    assert.strictEqual(loadConfig(dir).releases.emptyRelease, DEFAULT_EMPTY_RELEASE, String(emptyRelease))
+  }
 })
 
 test('defaults productName to the repo dir basename', () => {

@@ -7,7 +7,10 @@
  * commit subjects). Both walk the same tag ranges via lib/git-commits.cjs.
  *
  * Opt-in: ONLY commits carrying a `Release-Note:` footer appear here. The dev
- * subject stays terse; the footer carries the user-facing sentence.
+ * subject stays terse; the footer carries the user-facing sentence. A release
+ * with no notes still gets its heading and a one-line placeholder
+ * (`releases.emptyRelease`), so the newest section is always the version that
+ * shipped rather than the last one that happened to have user-facing changes.
  *
  *   feat(tasks): explicit state/created dates + sort-by
  *
@@ -43,7 +46,7 @@ const {
   tagExists,
   VERSION_PATTERN,
 } = require('./lib/git-commits.cjs')
-const { loadConfig } = require('./lib/config.cjs')
+const { loadConfig, DEFAULT_EMPTY_RELEASE } = require('./lib/config.cjs')
 
 // Buckets render in this order within each area.
 const BUCKET_ORDER = ['Action required', 'New', 'Improved', 'Fixed']
@@ -160,11 +163,19 @@ function formatReleaseDate(isoDate) {
   return `${Number.parseInt(day, 10)} ${MONTHS[Number.parseInt(month, 10) - 1]} ${year}`
 }
 
-/** Render one release section: heading, optional Highlights, then areas × buckets. */
-function renderReleasesSection(version, isoDate, notes) {
+/**
+ * Render one release section: heading, optional Highlights, then areas × buckets.
+ * With no notes, the heading and `emptyText` instead.
+ */
+function renderReleasesSection(version, isoDate, notes, emptyText = DEFAULT_EMPTY_RELEASE) {
   const lines = []
   lines.push(`## ${version} — ${formatReleaseDate(isoDate)}`)
   lines.push('')
+
+  if (notes.length === 0) {
+    lines.push(emptyText)
+    return lines.join('\n') + '\n'
+  }
 
   const highlights = notes.filter((n) => n.highlight)
   if (highlights.length === 1) {
@@ -260,11 +271,13 @@ function resolveOptions(options = {}) {
     productName: options.productName || defaultProductName(),
     scopeAreas: options.scopeAreas || {},
     changelogFile: options.changelogFile || 'CHANGELOG.md',
+    // `null` is the explicit off; only an absent option takes the default.
+    emptyRelease: options.emptyRelease === undefined ? DEFAULT_EMPTY_RELEASE : options.emptyRelease,
   }
 }
 
 function updateReleases(newVersion, options = {}) {
-  const { file, productName, scopeAreas, changelogFile } = resolveOptions(options)
+  const { file, productName, scopeAreas, changelogFile, emptyRelease } = resolveOptions(options)
   const releasesPath = join(process.cwd(), file)
   const header = defaultReleasesHeader(productName, changelogFile)
   let content = readReleases(releasesPath, header)
@@ -274,7 +287,7 @@ function updateReleases(newVersion, options = {}) {
     getCommitsSinceLastTag(newVersion, { onRange: (r) => (range = r) }),
     scopeAreas,
   )
-  if (notes.length === 0) {
+  if (notes.length === 0 && !emptyRelease) {
     console.log(`No Release-Note footers found since last tag — skipping ${file} update`)
     // Ensure the artifact exists so a version hook's downstream steps have a
     // file to act on even on a release with no user-facing notes.
@@ -288,7 +301,7 @@ function updateReleases(newVersion, options = {}) {
   // to today when the tag does not exist, which is the `npm version` path —
   // the version being released has no tag yet, so that stays unchanged.
   const date = getTagDate(`v${newVersion}`)
-  const section = renderReleasesSection(newVersion, date, notes)
+  const section = renderReleasesSection(newVersion, date, notes, emptyRelease)
   const before = content
   content = upsertReleasesSection(content, section, newVersion)
 
@@ -313,7 +326,11 @@ function updateReleases(newVersion, options = {}) {
   }
 
   writeFileSync(releasesPath, content, 'utf-8')
-  console.log(`✅ Updated ${file} with version ${newVersion} (${notes.length} note(s), ${range})`)
+  if (notes.length === 0) {
+    console.log(`✅ Updated ${file} with version ${newVersion} (no user-facing notes, ${range})`)
+  } else {
+    console.log(`✅ Updated ${file} with version ${newVersion} (${notes.length} note(s), ${range})`)
+  }
 }
 
 function retroFillReleases(count, options = {}) {
@@ -387,6 +404,7 @@ function main(argv) {
     productName: config.releases.productName,
     scopeAreas: config.releases.scopeAreas,
     changelogFile: config.changelog.file,
+    emptyRelease: config.releases.emptyRelease,
   }
   const retroIdx = args.indexOf('--retro')
 

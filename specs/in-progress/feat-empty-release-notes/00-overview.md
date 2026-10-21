@@ -2,7 +2,7 @@
 
 > **Type:** Feature
 > **Name:** feat-empty-release-notes
-> **Status:** In Progress — Phase 1 (started 2026-10-21)
+> **Status:** In Progress — Phase 2 (started 2026-10-21)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-10-21
@@ -67,7 +67,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 
 | # | Phase | Status | File |
 |---|-------|--------|------|
-| 1 | Live releases write a placeholder section, behind the new config key | ⬜ | [01-live-placeholder.md](01-live-placeholder.md) |
+| 1 | Live releases write a placeholder section, behind the new config key | ✅ | [01-live-placeholder.md](01-live-placeholder.md) |
 | 2 | `--retro` writes placeholders; docs updated | ⬜ | [02-retro-and-docs.md](02-retro-and-docs.md) |
 
 ## Open questions
@@ -84,3 +84,8 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 ## Changelog
 
 - 2026-10-21 — Spec created.
+- 2026-10-21 — Phase 1: release-generation tests live in a focused
+  `test/empty-release.test.js` (repo-per-test, like `release-dating.test.js`)
+  rather than `generate-releases.test.js`, which holds pure-function tests.
+  Malformed `emptyRelease` values (`0`, `null`, arrays, objects, blank) keep
+  the default text; only `false` disables it.
