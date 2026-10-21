@@ -7,9 +7,17 @@
 //   v1.0.0 ── F ── (v1.0.1)            hotfix branch
 //      └──── F′ ── M ── HEAD           main
 //
-// The next release from main took `v1.0.1..HEAD`. A..B excludes only commits
-// reachable from A, so F′ was listed again — and its Release-Note: footer
-// reached users a second time. Seen in a consumer on 36.2.9 → 36.2.10.
+// History: the next release from main once took `v1.0.1..HEAD` (newest tag by
+// sort). A..B excludes only commits reachable from A, so F′ was listed again.
+// That was fixed with a three-dot cherry-pick range, which dropped F′.
+//
+// Now the base is main's nearest ANCESTOR tag, v1.0.0, so F′ IS listed in
+// main's next release — deliberately. Environments that deploy from main
+// (test/demo) never ran the hotfix, and get the fix only in that release; its
+// notes should say so. The hotfix tag is no longer the base for main at all.
+//
+// The three-dot form still governs an explicit range (`--retro` pairs,
+// RELEASE_BASE_TAG) whose base is not an ancestor — tested below.
 
 const { test } = require('node:test')
 const assert = require('node:assert')
@@ -66,8 +74,14 @@ function hotfixRepo() {
   return { dir, git, pkg }
 }
 
-const probe = (dir, ...args) =>
-  JSON.parse(execFileSync('node', ['probe.cjs', ...args], { cwd: dir, encoding: 'utf8' }))
+// A trailing object is extra environment for the probe.
+const probe = (dir, ...args) => {
+  const env = typeof args[args.length - 1] === 'object' ? args.pop() : {}
+  const { RELEASE_BASE_TAG: _unset, ...base } = process.env
+  return JSON.parse(
+    execFileSync('node', ['probe.cjs', ...args], { cwd: dir, encoding: 'utf8', env: { ...base, ...env } }),
+  )
+}
 
 const runScript = (dir, name, ...args) =>
   execFileSync('node', [path.join(SCRIPTS, name), ...args], { cwd: dir, encoding: 'utf8' })
@@ -77,23 +91,27 @@ test('the hotfix fixture really is the non-ancestor case', () => {
   assert.throws(() => git('merge-base', '--is-ancestor', 'v1.0.1', 'main'))
 })
 
-test('the next release after a hotfix omits the cherry-picked copy', () => {
+test('the next release from main bases on its ancestor and lists F′', () => {
   const { dir } = hotfixRepo()
-  assert.deepStrictEqual(probe(dir, '1.0.2').since, ['unrelated'])
+  const { since, range } = probe(dir, '1.0.2')
+  assert.deepStrictEqual(since, ['count hops', 'unrelated'])
+  assert.strictEqual(range, 'v1.0.0..HEAD')
 })
 
-test('the range report says cherry-picks were dropped', () => {
-  const { dir } = hotfixRepo()
-  assert.match(probe(dir, '1.0.2').range, /^v1\.0\.1\.\.\.HEAD\b.*cherry-pick/)
-})
-
-test('a retro range between a hotfix tag and the next omits the copy', () => {
+test('an explicit non-ancestor range still drops the cherry-picked copy', () => {
   const { dir, git } = hotfixRepo()
   git('tag', 'v1.0.2')
   assert.deepStrictEqual(probe(dir, '1.0.2', 'v1.0.1', 'v1.0.2').between, ['unrelated'])
 })
 
-test('CHANGELOG and RELEASES for the next version list M and not F′', () => {
+test('RELEASE_BASE_TAG at a non-ancestor drops the copy and says so', () => {
+  const { dir } = hotfixRepo()
+  const { since, range } = probe(dir, '1.0.2', { RELEASE_BASE_TAG: 'v1.0.1' })
+  assert.deepStrictEqual(since, ['unrelated'])
+  assert.match(range, /^v1\.0\.1\.\.\.HEAD\b.*cherry-pick.*\(RELEASE_BASE_TAG\)$/)
+})
+
+test('CHANGELOG and RELEASES for main’s next version list both M and F′', () => {
   const { dir, pkg } = hotfixRepo()
   pkg('1.0.2') // what `npm version` has done to disk before the hook runs
   runScript(dir, 'generate-changelog.cjs')
@@ -101,9 +119,9 @@ test('CHANGELOG and RELEASES for the next version list M and not F′', () => {
   const changelog = fs.readFileSync(path.join(dir, 'CHANGELOG.md'), 'utf8')
   const releases = fs.readFileSync(path.join(dir, 'RELEASES.md'), 'utf8')
   assert.match(changelog, /unrelated/)
-  assert.doesNotMatch(changelog, /count hops/)
+  assert.match(changelog, /count hops/)
   assert.match(releases, /An unrelated improvement/)
-  assert.doesNotMatch(releases, /Hop counts are now correct/)
+  assert.match(releases, /Hop counts are now correct/)
 })
 
 // Stays-silent: when the previous tag IS an ancestor — every ordinary release —

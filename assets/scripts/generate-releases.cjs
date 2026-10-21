@@ -37,6 +37,7 @@ const {
   getCommitsSinceLastTag,
   getTagDate,
   indexOfOlderSection,
+  nearestAncestorTag,
   parseCommit,
   countCommitsSince,
   tagExists,
@@ -332,8 +333,9 @@ function retroFillReleases(count, options = {}) {
   let updated = 0
 
   for (const tag of targets) {
-    const idx = tags.indexOf(tag)
-    const previousTag = idx < tags.length - 1 ? tags[idx + 1] : null
+    // The release this one built on — its nearest ancestor tag, not its
+    // neighbour by sort, which for a hotfix is a tag on another line.
+    const previousTag = nearestAncestorTag(`${tag}^`)
     const version = tag.replace(/^v/, '')
     const notes = notesFor(getCommitsBetween(previousTag, tag), scopeAreas)
 
@@ -403,7 +405,13 @@ function main(argv) {
     }
     retroFillReleases(count, options)
   } else {
-    updateReleases(args[0] || getCurrentVersion(), options)
+    try {
+      updateReleases(args[0] || getCurrentVersion(), options)
+    } catch (error) {
+      if (error.code !== 'NO_BASE_TAG') throw error
+      console.error(`\n✖ ${error.message}\n`)
+      process.exit(1)
+    }
   }
 }
 

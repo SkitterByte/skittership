@@ -78,28 +78,40 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       }
     }
 
-    if (currentTag && allTags.includes(currentTag)) {
-      // HEAD is at a tag - find the next OLDER tag.
-      //
-      // allTags is NEWEST-first (`--sort=-version:refname`), so the older
-      // neighbour is at +1. This read -1, which is the NEWER tag, and broke
-      // two ways at once: `git log newer..older` is a backwards range that
-      // returns nothing, and the newest tag (index 0) failed the `> 0` guard
-      // and fell through to "first tag", returning all history.
+    // The base is the nearest ANCESTOR release tag, never the newest tag by
+    // sort. A hotfix branch has diverged from main, so the newest tag by sort
+    // can be on a line this release never contained: on a second hotfix that
+    // re-listed the first hotfix's commits, and on main after a suffix hotfix
+    // (v1.0.0-hotfix.1 sorts above v1.0.0) it based the release on a tag
+    // outside main's history. The ancestor is the release this one actually
+    // builds on, so a fix cherry-picked to main is listed again in main's next
+    // section — deliberately: environments that deploy main get it only then.
+    //
+    // RELEASE_BASE_TAG overrides it (the hotfix script passes it, and so did
+    // consumers' local hotfix wrappers before this existed).
+    const override = (process.env.RELEASE_BASE_TAG || '').trim()
+    const overridden = override.length > 0
+    if (currentTag && !allTags.includes(currentTag)) currentTag = null
+
+    if (overridden) {
+      if (!tagExists(override)) {
+        throw baseTagError(`RELEASE_BASE_TAG=${override} is not a tag in this repository.`)
+      }
+      previousTag = override
+    } else if (currentTag) {
+      // HEAD is at a tag (or past it, via the version fallback): the base is
+      // the nearest release tag BEFORE it.
       //
       // `npm version` never reaches this branch — the version being released
-      // has no tag yet, so it takes the else below — which is why it survived.
-      // The documented manual path (`npm run changelog` between releases) is
-      // what it broke, silently and with exit 0.
-      const currentIndex = allTags.indexOf(currentTag)
-      if (currentIndex + 1 < allTags.length) {
-        previousTag = allTags[currentIndex + 1]
-      } else {
-        // This is the OLDEST tag: everything up to and including it. Bound by
-        // the tag, NOT bare `git log` — when currentTag came from the version
-        // fallback, HEAD is past the tag, and an unbounded log folds work done
-        // AFTER the release into the released section. That is the same defect
-        // as the inverted walk, surviving in the single-tag case.
+      // has no tag yet — so it is the manual path (`npm run changelog`
+      // between releases) that depends on it.
+      previousTag = nearestAncestorTag(`${currentTag}^`)
+      if (!previousTag) {
+        // This is the FIRST release in its history: everything up to and
+        // including it. Bound by the tag, NOT bare `git log` — when currentTag
+        // came from the version fallback, HEAD is past the tag, and an
+        // unbounded log folds work done AFTER the release into the released
+        // section.
         const output = execSync(
           `git log ${currentTag} --pretty=format:"%h%x00%s%x00%b%x00" --no-merges`,
           { encoding: 'utf-8', stdio: 'pipe' },
@@ -109,25 +121,23 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
         return reconstructCommits(output)
       }
     } else {
-      // HEAD is not at a tag, use the most recent tag
-      previousTag = allTags[0]
-    }
-
-    if (!previousTag) {
-      // No previous tag found, get all commits
-      const output = execSync('git log --pretty=format:"%h%x00%s%x00%b%x00" --no-merges', {
-        encoding: 'utf-8',
-        stdio: 'pipe',
-      }).trim()
-
-      report('all history — no earlier tag')
-      return reconstructCommits(output)
+      previousTag = nearestAncestorTag('HEAD')
+      if (!previousTag) {
+        // Tags exist, yet none is an ancestor even after unshallowing. That
+        // is either a first release on a branch cut before any tag, or a
+        // history git cannot fully see — and the two cannot be told apart
+        // from here. Listing all history would rewrite the changelog on a
+        // guess, so refuse and let a person name the base.
+        throw baseTagError(
+          `No release tag is an ancestor of HEAD (${allTags.length} tag(s) exist elsewhere).`,
+        )
+      }
     }
 
     // When HEAD is at a tag, use the tag explicitly instead of HEAD
     // This ensures we get commits up to and including the tag commit
     const rangeEnd = currentTag || 'HEAD'
-    report(describeRange(previousTag, rangeEnd))
+    report(describeRange(previousTag, rangeEnd) + (overridden ? ' (RELEASE_BASE_TAG)' : ''))
 
     // Get commits since previous tag (inclusive of rangeEnd)
     // Use null character as delimiter to handle multi-line bodies
@@ -159,6 +169,9 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
 
     return commits
   } catch (error) {
+    // An undecidable base is a refusal, not a git failure: falling back to all
+    // history here would write exactly what the refusal exists to prevent.
+    if (error.code === 'NO_BASE_TAG') throw error
     // If git commands fail, try to get all commits as fallback
     try {
       const output = execSync('git log --pretty=format:"%h%x00%s%x00%b%x00" --no-merges', {
@@ -178,6 +191,59 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
 }
 
 const FORMAT = '--pretty=format:"%h%x00%s%x00%b%x00" --no-merges'
+
+// Release tags `git describe` may answer with: `v1.2.3`, `1.2.3`, and their
+// `-suffix` forms. A glob, so it also admits `v1.2.3-anything`.
+const DESCRIBE_MATCH = '--match "v[0-9]*.[0-9]*.[0-9]*" --match "[0-9]*.[0-9]*.[0-9]*"'
+
+/**
+ * The nearest release tag reachable from `ref` (including `ref` itself), or
+ * null when there is none.
+ *
+ * WHAT WOULD FOOL THIS: a shallow clone. Its history stops short, so an
+ * ancestor tag can be out of sight and "none" would be a lie — exactly the
+ * CI checkout this runs in. On a miss in a shallow repo, unshallow and ask
+ * again before answering null.
+ */
+function nearestAncestorTag(ref) {
+  const describe = () => {
+    try {
+      return execSync(`git describe --tags --abbrev=0 ${DESCRIBE_MATCH} ${ref}`, {
+        encoding: 'utf-8',
+        stdio: 'pipe',
+      }).trim()
+    } catch {
+      return null
+    }
+  }
+  const found = describe()
+  if (found) return found
+  let shallow = false
+  try {
+    shallow =
+      execSync('git rev-parse --is-shallow-repository', { encoding: 'utf-8', stdio: 'pipe' }).trim() ===
+      'true'
+  } catch {
+    // cannot tell — answer from what is visible
+  }
+  if (!shallow) return null
+  try {
+    execSync('git fetch --unshallow --tags', { encoding: 'utf-8', stdio: 'pipe' })
+  } catch {
+    return null
+  }
+  return describe()
+}
+
+function baseTagError(reason) {
+  const error = new Error(
+    `${reason}\n` +
+      '  Cannot tell which release this one builds on, so nothing was written.\n' +
+      '  Set RELEASE_BASE_TAG to the intended base tag and re-run.',
+  )
+  error.code = 'NO_BASE_TAG'
+  return error
+}
 
 /**
  * The commits in `to` that `from` does not already carry — as a `git log`
@@ -435,6 +501,7 @@ module.exports = {
   countCommitsSince,
   tagExists,
   indexOfOlderSection,
+  nearestAncestorTag,
   getCommitsSinceLastTag,
   reconstructCommits,
   parseCommit,

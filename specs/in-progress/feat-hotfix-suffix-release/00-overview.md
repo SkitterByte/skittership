@@ -115,7 +115,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 | # | Phase | Status | File |
 |---|-------|--------|------|
 | 1 | Suffix-aware ordering in generators | ✅ | [01-suffix-ordering.md](01-suffix-ordering.md) |
-| 2 | Nearest-ancestor changelog base | ⬜ | [02-ancestor-base.md](02-ancestor-base.md) |
+| 2 | Nearest-ancestor changelog base | ✅ | [02-ancestor-base.md](02-ancestor-base.md) |
 | 3 | `release:hotfix` command | ⬜ | [03-release-hotfix-command.md](03-release-hotfix-command.md) |
 | 4 | Install, upgrade path and docs | ⬜ | [04-install-and-docs.md](04-install-and-docs.md) |
 
@@ -143,3 +143,8 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 - 2026-10-21 — Phase 1: `nextFreePatch` now advises the next free
   `-hotfix.N` when a hotfix version collides, instead of a patch, because a
   patch is exactly what the scheme avoids.
+- 2026-10-21 — Phase 2: the refusal in Decision 5 applies only to an
+  untagged HEAD. A tagged HEAD with no ancestor tag is the first release in
+  its history, so it keeps the "all history through the tag" path. A
+  `RELEASE_BASE_TAG` that names a missing tag also refuses. Before, it would
+  have hit the catch-all and listed all history.
