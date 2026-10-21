@@ -77,6 +77,7 @@ async function promptSetup({ seed, pkgExists }) {
         scopeAreas: seed.releases.scopeAreas,
       },
       versionHook: pkgExists ? Boolean(ans.versionHook) : seed.versionHook,
+      hotfix: seed.hotfix,
     },
   }
 }

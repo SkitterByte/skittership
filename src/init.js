@@ -3,7 +3,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const { loadConfig, SCHEMA_VERSION } = require('./config.js')
+const { loadConfig, DEFAULT_CONFIG, SCHEMA_VERSION } = require('./config.js')
 const {
   MANIFEST_FILE,
   hashContent,
@@ -34,6 +34,9 @@ const RELEASES_SCRIPT = path.join('scripts', 'generate-releases.cjs')
 // so anything staged while the generators run would ride along. Installed
 // whenever either generator is.
 const INDEX_GUARD_SCRIPT = path.join('scripts', 'check-release-index.cjs')
+// Cuts a `-hotfix.N` version through the same `npm version` hook. Installed
+// whenever either generator is, since it exists to drive them.
+const HOTFIX_SCRIPT = path.join('scripts', 'release-hotfix.cjs')
 
 // Pre-1.1 the same generators shipped as .js. On a re-install we overwrite the
 // managed .cjs copies but must also delete these stale .js siblings, or the old
@@ -226,22 +229,24 @@ function releaseFromConfig(cfg) {
       scopeAreas: cfg.releases.scopeAreas,
     },
     versionHook: cfg.versionHook,
+    hotfix: cfg.hotfix,
   }
 }
 
 function serializeConfig(release) {
-  return (
-    JSON.stringify(
-      {
-        version: SCHEMA_VERSION,
-        changelog: release.changelog,
-        releases: release.releases,
-        versionHook: release.versionHook,
-      },
-      null,
-      2,
-    ) + '\n'
-  )
+  const config = {
+    version: SCHEMA_VERSION,
+    changelog: release.changelog,
+    releases: release.releases,
+    versionHook: release.versionHook,
+  }
+  // Only a non-default prefix is written. Dropping it would silently change
+  // which branches release-hotfix accepts; writing the default would rewrite
+  // every existing config for no reason.
+  if (release.hotfix && release.hotfix.branchPrefix !== DEFAULT_CONFIG.hotfix.branchPrefix) {
+    config.hotfix = { branchPrefix: release.hotfix.branchPrefix }
+  }
+  return JSON.stringify(config, null, 2) + '\n'
 }
 
 // Write the resolved config. The release object already folds in any existing
@@ -283,6 +288,7 @@ function installScripts(dir, release, opts) {
     copyAsset(dir, RELEASES_SCRIPT, path.join(dir, RELEASES_SCRIPT), managed)
   }
   copyAsset(dir, INDEX_GUARD_SCRIPT, path.join(dir, INDEX_GUARD_SCRIPT), managed)
+  copyAsset(dir, HOTFIX_SCRIPT, path.join(dir, HOTFIX_SCRIPT), managed)
 }
 
 // Delete pre-1.1 .js generator copies superseded by the .cjs ones.
@@ -429,6 +435,9 @@ function wireVersionHook(dir, release, { force }) {
     helpers.releases = 'node scripts/generate-releases.cjs'
     helpers['releases:retro'] = 'node scripts/generate-releases.cjs --retro'
   }
+  // Like every helper: a project that already maps `release:hotfix` to its own
+  // script keeps it unless --force.
+  helpers['release:hotfix'] = 'node scripts/release-hotfix.cjs'
   for (const [name, cmd] of Object.entries(helpers)) {
     if (pkg.scripts[name] && pkg.scripts[name] !== cmd && !force) continue
     pkg.scripts[name] = cmd

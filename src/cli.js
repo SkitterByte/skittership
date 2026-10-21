@@ -91,6 +91,8 @@ function resolveRelease(existing, opts) {
       scopeAreas: existing.releases.scopeAreas,
     },
     versionHook: pick(opts.versionHook, existing.versionHook),
+    // No flag sets it; carried so init's config rewrite does not drop it.
+    hotfix: existing.hotfix,
   }
 }
 

@@ -16,6 +16,7 @@ you can adopt release tooling without the spec workflow (and vice versa).
 | `scripts/generate-changelog.cjs` | Regenerates the dev-facing `CHANGELOG.md` from commit subjects |
 | `scripts/generate-releases.cjs` | Regenerates the user-facing `RELEASES.md` from `Release-Note:` footers |
 | `scripts/check-release-index.cjs` | Aborts `npm version` if anything unexpected is staged (npm's own commit takes no pathspec) |
+| `scripts/release-hotfix.cjs` | Cuts a `v<base>-hotfix.<N>` release on a hotfix branch, wired as `npm run release:hotfix` (see [Hotfix releases](#hotfix-releases)) |
 | `scripts/lib/` | Shared, zero-dependency git/config helpers |
 | `skittership.config.json` | Filenames, product name, scope→area map, feature toggles |
 | `package.json` `version` hook | Regenerates both artifacts at `npm version` (opt-in) |
@@ -116,6 +117,62 @@ npm run releases:retro   # same, for RELEASES.md
 node scripts/generate-changelog.cjs --retro 3   # or just the newest 3
 ```
 
+**Which commits a section covers.** A release's section lists the commits
+since the **nearest earlier release tag in its own history** (`git describe`),
+not the newest tag in the repo. After a hotfix, main's next section therefore
+lists the cherry-picked fix again: environments that deploy main get it only
+in that release. To choose the base yourself, set `RELEASE_BASE_TAG=<tag>`.
+If tags exist but none is in HEAD's history, even after a shallow clone is
+deepened, the generators refuse and write nothing rather than guess. Set
+`RELEASE_BASE_TAG` to go on.
+
+## Hotfix releases
+
+A hotfix must be exactly the prod tag plus the fix. Taking the next patch
+number breaks as soon as another environment uses patch numbers, because
+`v1.2.4` may already be on test. So a hotfix is the base release with a
+suffix:
+
+```
+v1.2.3 < v1.2.3-hotfix.1 < v1.2.3-hotfix.2 < v1.2.4 < v1.3.0
+```
+
+`-hotfix.N` sorts **after** its base. That is the opposite of semver
+pre-release order, and deliberate, because a hotfix is cut after the release
+it patches. Every other suffix (`-rc.1`) sorts before its base, as semver
+says.
+
+Branch from the prod tag, commit the fix, then cut it:
+
+```sh
+git switch -c hotfix/hop-count v1.2.3
+# ...commit the fix...
+npm run release:hotfix              # cuts v1.2.3-hotfix.1, pushes nothing
+```
+
+It works out the base from HEAD's history and picks one above the highest
+existing `-hotfix.N` for that base, counting tags from any branch. Then it
+runs your own `npm version <v>` (or `pnpm version` in a pnpm project), so your
+`preversion`/`version` hooks regenerate CHANGELOG and RELEASES as usual. The
+new section lists only the fix.
+
+| Flag | Does |
+|------|------|
+| *(none)* | Cut the version, then print the next commands: push the branch, push the tag (which starts the deploy), and carry the fix to main without the version commit |
+| `--push` | Also push the branch, then the tag, to `origin` |
+| `--dry-run` | Print the version and base it would use; change nothing |
+| `--json` | Print `{tag, version, baseTag, versionCommit, branch, pushed}` on stdout and everything else on stderr. For tools: skitterspec's `/spec-hotfix` uses `versionCommit` to leave the version commit out of the carry to main |
+| `--allow-postversion` | Run even though `package.json` has a `postversion` script |
+
+It refuses, with one line and a non-zero exit, when:
+- HEAD is not on a `hotfix/*` branch (configurable, see below)
+- the tree is dirty
+- no release tag is an ancestor
+- HEAD is already released
+- `package.json` has a **`postversion`** script. That hook runs inside
+  `npm version`, and if it pushes, "pushes nothing" stops being true. If
+  yours is safe, pass `--allow-postversion`.
+
 ## Configuration
 
 `skittership.config.json` (repo root):
@@ -130,9 +187,13 @@ node scripts/generate-changelog.cjs --retro 3   # or just the newest 3
     "productName": "My Product",
     "scopeAreas": { "api": "API", "cli": "Install" }
   },
-  "versionHook": true
+  "versionHook": true,
+  "hotfix": { "branchPrefix": "hotfix/" }
 }
 ```
+
+`hotfix.branchPrefix` sets the branches `release:hotfix` will run on. It
+defaults to `hotfix/`, and `init` writes it only when you change it.
 
 ## License
 

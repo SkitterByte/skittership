@@ -42,7 +42,8 @@
     "releases": "node scripts/generate-releases.cjs",
     "releases:retro": "node scripts/generate-releases.cjs --retro",
     "approve": "node scripts/approve-release.cjs",
-    "staged": "npm stage list"
+    "staged": "npm stage list",
+    "release:hotfix": "node scripts/release-hotfix.cjs"
   },
   "repository": {
     "type": "git",

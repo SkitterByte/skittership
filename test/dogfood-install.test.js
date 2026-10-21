@@ -34,6 +34,7 @@ function installedPairs() {
     path.join('scripts', 'generate-changelog.cjs'),
     path.join('scripts', 'generate-releases.cjs'),
     path.join('scripts', 'check-release-index.cjs'),
+    path.join('scripts', 'release-hotfix.cjs'),
     path.join('scripts', 'lib', 'git-commits.cjs'),
     path.join('scripts', 'lib', 'config.cjs'),
   ]) {
