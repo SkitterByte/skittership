@@ -78,7 +78,10 @@ Rules:
 
 - **Opt-in.** Omit the footer for internal/dev-only changes (`chore`, `test`,
   `docs`, `style`, refactors with no user effect, plumbing). Only commits with a
-  footer appear in `RELEASES.md`.
+  footer appear in `RELEASES.md`. A release with none still gets its heading
+  and a "No user-facing changes in this release." line, so the newest section
+  always matches the shipped version (`releases.emptyRelease` sets the text,
+  or `false` turns it off).
 - Put a **blank line before** the footer (so it's a proper commit footer).
 - `feat`→New, `fix`→Fixed, `perf`/`refactor`→Improved, breaking→Action required
   — the bucket is derived from the commit type, so just write the note.

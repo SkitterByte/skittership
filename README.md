@@ -107,7 +107,10 @@ current state or when it was created.
 `Release-Note!:` promotes the note into the release Highlights; `Release-Area:`
 overrides the scope→area mapping; `Release-Note: none` marks a commit explicitly
 not user-facing. The terse subject feeds `CHANGELOG.md`; the footer feeds
-`RELEASES.md`. Both are regenerated at `npm version`, or on demand:
+`RELEASES.md`. A release with no footers at all — a CI or dependency bump —
+still gets a `RELEASES.md` section reading "No user-facing changes in this
+release.", so the newest entry always matches the version you shipped. Both
+files are regenerated at `npm version`, or on demand:
 
 ```sh
 npm run changelog        # regenerate CHANGELOG.md for the current version
@@ -185,12 +188,17 @@ It refuses, with one line and a non-zero exit, when:
     "enabled": true,
     "file": "RELEASES.md",
     "productName": "My Product",
-    "scopeAreas": { "api": "API", "cli": "Install" }
+    "scopeAreas": { "api": "API", "cli": "Install" },
+    "emptyRelease": true
   },
   "versionHook": true,
   "hotfix": { "branchPrefix": "hotfix/" }
 }
 ```
+
+`releases.emptyRelease` is what a release with no user-facing notes says:
+`true` (the default) for "No user-facing changes in this release.", a string
+for your own wording, or `false` to write no section for it at all.
 
 `hotfix.branchPrefix` sets the branches `release:hotfix` will run on. It
 defaults to `hotfix/`, and `init` writes it only when you change it.

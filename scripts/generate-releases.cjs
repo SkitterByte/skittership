@@ -334,7 +334,7 @@ function updateReleases(newVersion, options = {}) {
 }
 
 function retroFillReleases(count, options = {}) {
-  const { file, productName, scopeAreas, changelogFile } = resolveOptions(options)
+  const { file, productName, scopeAreas, changelogFile, emptyRelease } = resolveOptions(options)
   const releasesPath = join(process.cwd(), file)
   const header = defaultReleasesHeader(productName, changelogFile)
   let content = readReleases(releasesPath, header)
@@ -356,10 +356,12 @@ function retroFillReleases(count, options = {}) {
     const version = tag.replace(/^v/, '')
     const notes = notesFor(getCommitsBetween(previousTag, tag), scopeAreas)
 
-    if (notes.length === 0) {
-      // No notes for this tag. Skipping would leave behind any section written
-      // by an earlier run whose commit range was wrong (e.g. before the tag
-      // existed), so drop it and let the file tell the truth.
+    if (notes.length === 0 && !emptyRelease) {
+      // No notes for this tag, and placeholders are switched off. Skipping
+      // would leave behind any section written by an earlier run whose commit
+      // range was wrong (e.g. before the tag existed), so drop it and let the
+      // file tell the truth. With placeholders on, the upsert below replaces
+      // such a section instead, which tells the same truth.
       const pruned = removeReleasesSection(content, version)
       if (pruned.removed) {
         content = pruned.content
@@ -371,10 +373,14 @@ function retroFillReleases(count, options = {}) {
       continue
     }
 
-    const section = renderReleasesSection(version, getTagDate(tag), notes)
+    const section = renderReleasesSection(version, getTagDate(tag), notes, emptyRelease)
     content = upsertReleasesSection(content, section, version)
     updated += 1
-    console.log(`✅ ${tag}: wrote ${notes.length} note(s)`)
+    if (notes.length === 0) {
+      console.log(`✅ ${tag}: no user-facing notes — wrote placeholder`)
+    } else {
+      console.log(`✅ ${tag}: wrote ${notes.length} note(s)`)
+    }
   }
 
   if (updated > 0) {

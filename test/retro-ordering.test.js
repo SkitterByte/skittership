@@ -13,6 +13,8 @@
 //    "skipping" and moved on — leaving behind any section an earlier run had
 //    written for that version under a wrong commit range. That is how a note
 //    for work that shipped in 2.0.0 stayed pinned under 1.1.0.
+//    Such a section is now replaced by the "no user-facing changes"
+//    placeholder; with `releases.emptyRelease: false` it is removed, as before.
 
 const { test } = require('node:test')
 const assert = require('node:assert')
@@ -195,10 +197,68 @@ test('releases --retro prunes a stale section and keeps order descending', () =>
   run(RELEASES, ['--retro'], dir)
   const written = fs.readFileSync(path.join(dir, 'RELEASES.md'), 'utf8')
 
-  assert.doesNotMatch(written, /## 1\.1\.0/, 'stale 1.1.0 section removed')
-  assert.deepStrictEqual(order(written, /## (\d[\d.]*) /g), ['2.0.0', '1.0.0'])
-  assert.match(written, /The third thing works now\./)
+  const section110 = written.slice(written.indexOf('## 1.1.0 '), written.indexOf('## 1.0.0 '))
+  assert.doesNotMatch(section110, /third thing/, 'stale 1.1.0 note replaced')
+  assert.match(section110, /No user-facing changes in this release\./)
+  assert.deepStrictEqual(order(written, /## (\d[\d.]*) /g), ['2.0.0', '1.1.0', '1.0.0'])
+  assert.strictEqual(written.match(/The third thing works now\./g).length, 1, 'note only under 2.0.0')
   assert.match(written, /You can do the first thing\./)
+})
+
+test('releases --retro with emptyRelease: false still prunes the stale section', () => {
+  const dir = repoWithAnEmptyRelease()
+  fs.writeFileSync(
+    path.join(dir, 'skittership.config.json'),
+    JSON.stringify({ releases: { emptyRelease: false } }),
+  )
+  fs.writeFileSync(
+    path.join(dir, 'RELEASES.md'),
+    [
+      '# Release Notes',
+      '',
+      '## 1.1.0 — 04 Aug 2026',
+      '',
+      '### Core',
+      '- **Fixed** — The third thing works now.',
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+
+  run(RELEASES, ['--retro'], dir)
+  const written = fs.readFileSync(path.join(dir, 'RELEASES.md'), 'utf8')
+
+  assert.doesNotMatch(written, /## 1\.1\.0/, 'stale 1.1.0 section removed')
+  assert.doesNotMatch(written, /No user-facing changes/)
+  assert.deepStrictEqual(order(written, /## (\d[\d.]*) /g), ['2.0.0', '1.0.0'])
+})
+
+test('releases --retro gives a note-less tag a placeholder, in order, beside hotfixes', () => {
+  const dir = repoWithAnEmptyRelease()
+  const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+  // A note-less hotfix branched from v2.0.0, then a note-less 2.1.0 on main.
+  git('checkout', '-q', '-b', 'hotfix/x', 'v2.0.0')
+  fs.writeFileSync(path.join(dir, 'h.txt'), 'x\n')
+  git('add', '--', 'h.txt')
+  git('commit', '-q', '-m', 'chore(ci): hotfix runner')
+  git('tag', 'v2.0.0-hotfix.1')
+  git('checkout', '-q', '-')
+  fs.writeFileSync(path.join(dir, 'd.txt'), 'x\n')
+  git('add', '--', 'd.txt')
+  git('commit', '-q', '-m', 'chore(ci): bump the runner')
+  git('tag', 'v2.1.0')
+
+  run(RELEASES, ['--retro'], dir)
+  const written = fs.readFileSync(path.join(dir, 'RELEASES.md'), 'utf8')
+
+  assert.deepStrictEqual(order(written, /\n## (\S+) /g), [
+    '2.1.0',
+    '2.0.0-hotfix.1',
+    '2.0.0',
+    '1.1.0',
+    '1.0.0',
+  ])
+  assert.strictEqual(written.match(/No user-facing changes in this release\./g).length, 3)
 })
 
 test('changelog --retro prunes a stale section and keeps order descending', () => {
