@@ -6,6 +6,11 @@ disable-model-invocation: true
 
 # /spec-to-main — land the branch on main, keep the spec open
 
+> Stay silent while this runs — speak only to ask something you cannot answer
+> yourself, or to report a failure at the moment it happens. Read
+> `.claude/rules/spec-reports.md` before reporting; it defines the block this
+> skill ends with.
+
 The **intermediate** landing. `/spec-complete` also lands the branch, but then
 verifies every phase, flips the status to Complete, `git mv`s the spec to
 `complete/`, and tears the environment down.
@@ -82,6 +87,16 @@ nothing else.
 On a **no-op** ("already landed on `<base>` — nothing to integrate"), just say so
 and continue — the branch has no commits base doesn't already have.
 
+**Then run the after-land commands.** Where the plan ends with a
+`then, in the primary checkout (<path>), run:` section — the project's
+`afterLand`, such as a data migration — run those commands in that directory,
+in order, after the fast-forward and **before** the re-test below, which may
+need them. Run them on the no-op too: the engine prints them there because a
+land made elsewhere leaves them pending here.
+**Stop at the first non-zero exit**, and carry on with §5: a failure makes the run `⚠️`, naming the command
+that failed and the ones that did not run, and it **never undoes the land**.
+No section, nothing to run, and nothing to say about it.
+
 ## 5. Re-test on base, then report
 
 - Run the project's test command **from the primary checkout** — base must be
@@ -93,10 +108,32 @@ and continue — the branch has no commits base doesn't already have.
 - Do **NOT**: add a State-log row (status doesn't change), flip any phase/status
   to Complete, `git mv` the spec, or tear down the worktree/stack.
   **The spec stays `In Progress` and the worktree stays put.**
-- Report: the base branch, the fast-forward result, and the green base test. It
-  **never pushes** — mention the user can `git push` the base branch themselves to
+- It **never pushes** — say the user can `git push` the base branch themselves to
   trigger CI / the shared env.
-- Point the way forward: `/spec-next` to continue the remaining phases (you'll keep
-  committing on the same branch and can `/spec-to-main` again), and `/spec-complete`
-  when every phase is genuinely done — it will land the final commits, finalise,
-  and tear down.
+- `Next` points the way forward: `/spec-next` to continue the remaining phases
+  (you'll keep committing on the same branch and can `/spec-to-main` again), and
+  `/spec-complete` when every phase is genuinely done — it will land the final
+  commits, finalise, and tear down.
+
+End with the block defined in `.claude/rules/spec-reports.md`. That file carries
+the shape; this section carries only what is specific here.
+
+**Verdicts**
+
+- `✅` — the branch is on the base and the base is green.
+- `⚠️` — landed, with something worth knowing — an after-land command that
+  failed, for one.
+- `❌` — the rebase conflicted, or the base went red after the fast-forward.
+  Quote it; the repo is mid-something and that is what the reader needs.
+- `⏸` — a dirty worktree, red tests, or no spec to land. Nothing moved.
+
+**Fields:** `Branch` · `Tests` · `Notes` · `Landed` · `Follow-ups` · `Next`
+
+`Notes` carries the after-land commands §4 ran, and where — or the one that
+failed and the ones that did not run. Nothing about it when none are
+configured.
+
+**No `Spec` field, deliberately.** This skill changes no status and moves no
+folder, and a `Spec` line here would read as though it had. The spec stays
+`In Progress` and the worktree stays standing — if that needs saying, the
+verdict clause says it.

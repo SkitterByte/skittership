@@ -5,6 +5,11 @@ description: Re-validate an existing spec against the current codebase — detec
 
 # /spec-review — bring a spec back in sync with the codebase
 
+> Stay silent while this runs — speak only to ask something you cannot answer
+> yourself, or to report a failure at the moment it happens. Read
+> `.claude/rules/spec-reports.md` before reporting; it defines the block this
+> skill ends with.
+
 Specs rot: the code moves on while a spec sits in the backlog or pauses
 mid-build. This skill re-validates a spec against the **current** code and
 rewrites the stale parts so it's safe to act on. It plans only — it does not
@@ -97,8 +102,113 @@ resolve it by reading the code, do that instead of asking.
 
 
 
+## 4b. Hand the refresh back on a page, then wait
+
+**Only when the project has per-spec isolation** (`specs/.core/env.config.json`
+present) **and this review actually changed something.** Either missing → skip
+the whole step in silence.
+
+A refreshed spec is a rewrite of a document someone is about to work from, so it
+gets read before it is committed — the same ending `/spec` now has:
+
+```
+skitterspec spec-env review <spec> --docs --buttons refresh
+```
+
+`--docs` reads the spec's own documents from the tree you are standing in, so it
+wants no worktree and works for a spec in any bucket. These documents are
+**tracked**, so the diff against `HEAD` is a patch rather than a set of new
+files — which is exactly what the reader wants here: what drifted, and what you
+rewrote.
+
+**Render nothing when nothing changed.** `/spec-review` frequently concludes a
+spec is still accurate, and that is a success rather than a gap. A page showing
+an empty diff under a commit button asks for a verdict on nothing, and the
+engine refuses it for the same reason — `nothing to review`. Take that refusal
+as the answer and report the `⏸`/`✅` you already had.
+
+**Arm nothing.** No `review arm` here: the gate asserts that a phase which ended
+owes an answer, and a re-validated spec has ended no phase. Walking away leaves
+an uncommitted spec, which is the state this skill has always finished in.
+
+### The three endings
+
+`--buttons refresh` offers `Commit`, `Request changes` and `Discuss`.
+
+**No start verdict, deliberately.** The spec this skill refreshed may already be
+in progress — that is half of what it is used for — so `Commit & Start` would
+offer to provision a worktree for a spec that already has one.
+
+- **`commit`** — hand off to `review.commitWith` (`/commit` by default) with the
+  pathspec the render reported on `docs.paths`, then finish. The spec keeps
+  whatever status step 4 left it in.
+- **`changes`** — work the notes into the spec, record a resolution for each so
+  the next render strikes it through with what changed, re-render, and wait
+  again.
+- **`discuss`** — report and talk. Claim nothing, change nothing.
+
+### Then wait for it
+
+**The wait is a command. Do not write one.** Note the moment you start waiting
+as an ISO timestamp, run the engine's wait in the background, and end your turn:
+
+```
+skitterspec spec-env review wait <spec> --since <the timestamp>
+```
+
+Pass no timeout. On waking, let the engine pick the pass —
+`skitterspec spec-env review <spec> --docs --claim-since <the timestamp> --json`
+— and route on the verdict above.
+
+**Where the page is `file://`** the pass is copied and pasted, so the wait is the
+turn ending and the banner says so. Do not start a watch that cannot fire.
+
 ## 5. Report
 
-Summarise the drift found, what you changed, any questions still open, and
-whether the spec is now safe to `/spec-start` (or should drop back to `Draft` until
-the open questions are resolved). Do **not** `git commit` unless the user asks.
+Do **not** `git commit` unless the user asks.
+
+End with the block defined in `.claude/rules/spec-reports.md`. That file carries
+the shape; this section carries only what is specific here.
+
+**Verdicts**
+
+- `✅` — checked against the code and brought up to date; safe to `/spec-start`.
+- `⚠️` — updated, but dropped back to `Draft`: questions are open that only the
+  operator can answer. Name them.
+- `⏸` — no such spec, or nothing to review. Nothing changed.
+
+**Fields:** `Tracker` · `Spec` · `Built` · `Follow-ups` · `Next`
+
+`Built` is the drift found and what you changed about it — a renamed file, an
+API that moved, a task the code already does. `Spec` carries the status the
+review leaves it in, which is the answer to "can I start this?".
+
+**Where step 4b rendered a page the run is waiting**, so the block omits the
+`Review` row and ends on the banner from `.claude/rules/spec-reports.md` — the
+tier stack copied from the engine's own lines, never one link chosen for the
+reader:
+
+---
+
+## ⏸ Review ready — &lt;N&gt; files, +&lt;a&gt; −&lt;d&gt;
+
+- **local** — &lt;the `local:` URL&gt;
+- **network** — &lt;the `network:` URL, or off with the command that turns it on&gt;
+- **remote** — &lt;the `remote:` URL, or off with the command that turns it on&gt;
+
+I'm holding here until you send a verdict — the wait covers local and network.
+
+`Commit` commits the refresh · `Request changes` works them now
+
+---
+
+`Next` then names the page rather than a command, because the button is what
+carries the work on.
+
+Where nothing was rendered — no isolation, or no drift to show — `Next` is
+`/commit, then /spec-start <name>`, since this skill does not commit and
+`/spec-start` refuses a tree holding anything that is not the spec's.
+
+**Drift found and not fixed is a `Follow-up`, not a silence.** A spec this skill
+declared reviewed is one nobody will re-read; something it noticed and left
+undone has to leave the session in writing or it did not happen.

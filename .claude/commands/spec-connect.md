@@ -1,10 +1,10 @@
 ---
-description: Expose one spec's dev servers on the canonical localhost ports (or `main` to hand them back)
-argument-hint: "[spec|main]"
-allowed-tools: Bash(npx skitterspec spec-env connect:*)
+description: Expose one spec's dev servers on the canonical localhost ports — bare uses the spec you are on, `main` hands them back
+argument-hint: "[<spec> | main]"
+allowed-tools: Bash(pnpm exec skitterspec spec-env connect:*)
 disable-model-invocation: true
 ---
-!`npx skitterspec spec-env connect $ARGUMENTS`
+!`pnpm exec skitterspec spec-env connect $ARGUMENTS`
 
 Relay the engine output above verbatim. Add nothing and run nothing else.
 

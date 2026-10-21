@@ -1,0 +1,2 @@
+minimumReleaseAgeExclude:
+  - '@skitterbyte/skitterspec@23.0.1'

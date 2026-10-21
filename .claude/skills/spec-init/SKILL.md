@@ -5,6 +5,11 @@ description: Bootstrap the spec-driven-development workflow in the current proje
 
 # /spec-init — set up the spec-driven-development workflow
 
+> Stay silent while this runs — speak only to ask something you cannot answer
+> yourself, or to report a failure at the moment it happens. Read
+> `.claude/rules/spec-reports.md` before reporting; it defines the block this
+> skill ends with.
+
 Bootstrap (or repair) everything this project needs to run the spec lifecycle.
 **Idempotent:** detect what already exists, create only what's missing, and never
 clobber customised content. Finish with a summary of created vs already-present.
@@ -22,10 +27,13 @@ clobber customised content. Finish with a summary of created vs already-present.
 > **Leave alone**. Non-interactively it only adds what's missing; `--resync` /
 > `--reset` (reset needs `--yes`) drive the stronger actions.
 
-The system is **ten skills**: `spec` (feature), `spec-bug` (bug),
-`spec-hotfix` (a bug fixed on a released tag), `spec-review`, `spec-start`,
-`spec-next`, `spec-to-main`, `spec-complete`, `spec-cancel`, and this
-`spec-init`. The lifecycle is `backlog → in-progress → complete / cancelled`,
+The system is **thirteen skills**: `spec` (feature), `spec-bug` (bug),
+`spec-hotfix` (a bug fixed on a released tag),
+`no-spec` (work that genuinely has none — off the base branch all the same),
+`spec-review`, `spec-start`,
+`spec-next`, `spec-diff` (read a spec's diff as a page),
+`spec-reviewed` (pick up a review you approved on that page), `spec-to-main`,
+`spec-complete`, `spec-cancel`, and this `spec-init`. The lifecycle is `backlog → in-progress → complete / cancelled`,
 with `.core` holding always-apply project rules.
 
 ## 0. Workspace mode (only when adopting isolation)
@@ -99,6 +107,40 @@ Ensure it exists. If missing, create it documenting:
 Read a sibling spec skill (e.g. `spec`, `spec-next`) for the canonical shapes
 rather than inventing them. If the rule already exists, leave it unless stale.
 
+## 4a. The review-gate hook (`.claude/hooks/review-gate.cjs`)
+
+`skitterspec init` **and `skitterspec update`** install the hook script and
+register it in the project's **committed** `.claude/settings.json` as a
+`PreToolUse` hook on `Bash`. It runs one engine call per Bash tool call and
+refuses a `git commit` in a worktree whose phase is still awaiting a verdict.
+
+**Both commands, and that is not a detail.** Copying the script and registering
+it are one operation, and they were once split across two code paths — so
+`update` landed the file, reported `created:`, and wired nothing, on every
+project that upgraded. Landing the script is not installing the hook.
+
+**`.cjs`, and the extension is load-bearing.** The script lands inside the
+target project, where *that* project's `package.json` decides how node parses a
+`.js` — so CommonJS shipped as `.js` crashes in any `"type": "module"` project,
+on every Bash tool call. `.cjs` settles it at the file. A registration left over
+from the release that named `.js` is rewritten in place, keeping any wrapping
+the operator added, rather than gaining a second entry beside it.
+
+**Committed, not machine-local**, and the difference is the point: the trusted
+worktree root is one machine's absolute path, while *a phase that ended owes an
+answer* is the project's policy and should reach everyone who clones it. The
+command is written with `${CLAUDE_PROJECT_DIR}`, so it holds in worktrees too.
+
+**Say it is there, once.** A hook that blocks a commit with the operator not
+knowing a hook exists reads as a broken git, so name it in the report when it is
+newly registered — and say what turns it off (`review.required: false` in
+`env.config.json`, which the hook defers to entirely).
+
+**Never fatal, and never rewritten.** A settings file that is not parseable JSON
+is reported and left exactly as it is — it is the operator's config, and
+everything else in it would be lost. A settings file that already names this
+script, however it was wrapped, is left alone rather than gaining a second copy.
+
 ## 5. CLAUDE.md
 
 Ensure a `## Spec workflow` section exists. If absent, add one with the
@@ -109,7 +151,28 @@ the section exists, refresh only stale folder/skill names — don't rewrite it.
 
 ## 6. Report
 
-Summarise per area — folders, `.gitignore` lines, tooling-ignore negations,
-skills (present/missing), rule file, CLAUDE.md section — as created / updated /
-already-present, plus the `git check-ignore` result for `.core`. Do **not**
-`git commit` unless the user asks.
+Do **not** `git commit` unless the user asks.
+
+End with the block defined in `.claude/rules/spec-reports.md`. That file carries
+the shape; this section carries only what is specific here.
+
+**Verdicts**
+
+- `✅` — every area is in place.
+- `⚠️` — bootstrapped, with something worth knowing: a skill that could not be
+  installed, a CLAUDE.md that was left alone, a `.core` that is still ignored.
+- `❌` — it wrote some areas and failed on another. Name which, so the re-run is
+  informed; this skill is idempotent and re-running it is the fix.
+- `⏸` — not a git repo, or nothing it could safely write into.
+
+**Fields:** `Built` · `Follow-ups` · `Next`
+
+**`Built` is per area, one line each** — folders, `.gitignore` lines,
+tooling-ignore negations, skills (present/missing), rule files, CLAUDE.md
+section — as created / updated / already-present, plus the `git check-ignore`
+result for `.core`. This is the one skill whose `Built` is a list rather than a
+clause, because "what is now true of this project" is the entire answer it
+exists to give.
+
+**There is no spec to name**, so the verdict line drops that segment:
+`✅ /spec-init · every area in place`.

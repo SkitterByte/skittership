@@ -5,6 +5,11 @@ description: Cancel a spec — capture the reason, record final progress, stamp 
 
 # /spec-cancel — record, stamp a reason, archive a spec
 
+> Stay silent while this runs — speak only to ask something you cannot answer
+> yourself, or to report a failure at the moment it happens. Read
+> `.claude/rules/spec-reports.md` before reporting; it defines the block this
+> skill ends with.
+
 ## 1. Identify the target spec
 
 - Use the name/path argument if given, else the spec **in context**. If unclear,
@@ -54,11 +59,21 @@ move the whole folder).
 
 
 Then **commit the cancellation edits** — this skill wrote them, so it commits
-them:
+them. Ask the engine which paths are this spec's, then stage and commit
+**exactly those**:
 
 ```
-git add specs/ && git commit -m "chore(spec): cancel <name>"
+skitterspec spec-env stage <name>     # lists them; --json to consume
+git add -- <the owned paths>
+git commit -m "chore(spec): cancel <name>" -- <the owned paths>
 ```
+
+**Never `git add specs/`.** That stages a *directory*, so a spec another
+session is part-way through writing lands in this commit under this spec's
+ticket. The `--` on the **commit** is the other half: a checkout has one
+`.git/index`, shared by every session standing in it, so a bare `git commit`
+takes whatever else is staged there however carefully you staged your own.
+`.claude/rules/spec-planning.md` carries the full account.
 
 **This matters more here than anywhere else.** Teardown (step 7) refuses a dirty
 worktree and offers `--force` as the way through — and forcing would destroy the
@@ -67,7 +82,31 @@ needs `--force`. Do not `git push`.
 
 ## 6. Report
 
-Confirm the cancellation, the reason recorded, the new location, and the commit.
+**The block is emitted when the run ends, not where this section sits.** The
+sections below run after it, so their outcome belongs in the block — write it
+once, at the end, with what actually happened.
+
+End with the block defined in `.claude/rules/spec-reports.md`. That file carries
+the shape; this section carries only what is specific here.
+
+**Verdicts**
+
+- `✅` — stamped, moved to `cancelled`, committed, torn down.
+- `⚠️` — cancelled, with something worth knowing: teardown declined, a tracker
+  refresh that failed, unpushed commits the operator chose to let go.
+- `❌` — it acted and stopped part-way. Say what is where.
+- `⏸` — no reason given, or no such spec. Nothing changed.
+
+**Fields:** `Tracker` · `Spec` · `Worktree` · `Follow-ups` · `Next`
+
+**The reason goes in the verdict clause** — `✅ /spec-cancel · feat-foo ·
+superseded by feat-bar`. It is the one thing anyone reading this later wants,
+and a cancellation is an ordinary successful run, so it must not be mistaken for
+a `Why`: that field is for a run that did not do what it set out to.
+
+`Worktree` says what was reclaimed, or that teardown was declined and the
+worktree still stands — on a cancelled spec that worktree may hold the only copy
+of the work, so an unreclaimed one is worth a line rather than a silence.
 
 ## 7. Tear down the environment (opt-in, only if configured)
 
@@ -75,25 +114,54 @@ Confirm the cancellation, the reason recorded, the new location, and the commit.
 reclaim the cancelled spec's environment. On confirmation, run the `spec-env` CLI
 directly (the old `/spec-env-down` skill is gone — teardown is folded in here):
 
+0. **Name a pass still waiting for THIS spec — before anything is removed.**
+
+   ```
+   skitterspec spec-env review waiting --json
+   ```
+
+   Filter to the spec being cancelled and say nothing about any other: a run
+   reports itself and nothing else (`.claude/rules/spec-reports.md`). For each
+   one, give the code, the verdict and the age, then the two exits — claim it
+   now with `/spec-reviewed <code>` **while the worktree still stands**, or
+   disown it with `skitterspec spec-env review <spec> --drop <code>`.
+
+   **Why here and not anywhere else.** Nothing is about to become unreachable —
+   a pass can be disowned long after its spec is gone. What is about to pass is
+   the last moment the verdict can still be **honoured**: before teardown a
+   `commit` pass can be claimed and acted on, after it there is no branch left
+   to commit to and disowning is all that remains. On a cancelled spec that is
+   sharper still — the worktree may hold the only copy of the work, so a pass
+   approving it is the one thing that might argue for keeping it.
+
+   **It reports, and it never blocks.** No refusal, no confirmation of its own,
+   no non-zero exit — this step already asks before it reclaims anything, and a
+   waiting pass is information rather than a second gate.
+   And **it never claims** — reporting a pass is not taking one, and
+   `/spec-diff` §0 is untouched by this step.
+
+   Put what you found in the report's `Notes` row.
+   Silent when nothing is waiting, which is the usual case.
+
 1. If `.spec-env/connected` names this spec, run `skitterspec spec-env connect
    main` first to free the canonical ports.
 2. `skitterspec spec-env dev down <name>` — stop its host dev servers.
-**Standing in the worktree? Leave it before you tear it down.** If this
-session's cwd is inside the spec's own worktree, get out **first**, then run the
-teardown commands. How you leave depends on how you got in:
+**Standing in the worktree? Leave it before you tear it down.** If this session's
+cwd is inside the spec's own worktree — the normal case in `worktree` mode, since
+`/spec-start` moves you there — get out **first**, then run the teardown commands.
+One instruction covers it:
 
-- **`/spec-start` moved this session in** — the normal path in `worktree` mode.
-  Call **`ExitWorktree`** with `action: "keep"`. It restores the session to the
-  directory it started from *and* clears the caches still pointing at the
-  worktree, which a bare `cd` does not: after a `cd` the session stays registered
-  against the tree and asks you about it again when it ends.
-- **You opened the terminal yourself** — `cd` to the primary checkout, as always.
-  `ExitWorktree` is a no-op outside a session it moved, so trying it costs
-  nothing, but the `cd` is what relocates you.
+```
+cd <primary checkout>
+```
 
-**Always `keep`, never `remove`.** `ExitWorktree` refuses to remove a worktree
-entered by path in any case, and the `spec-env down` plan below has to stay the
-single thing that deletes — a second deleter is how the teardown guards get
+That is the whole mechanism, and it does not matter how you got in: the session
+was moved by a `cd` and it leaves by one. There is no tool to call here, and none
+should be reached for — the move in is a plain `cd` precisely because a tool that
+asks for approval is unusable on a phone.
+
+**`spec-env down` stays the single thing that deletes a worktree.** The plan
+below is the only deleter, because a second one is how the teardown guards get
 bypassed.
 
 Not because git refuses — it does not. `git worktree remove` **succeeds** on the
@@ -107,6 +175,32 @@ only ordering that survives.
 3. `skitterspec spec-env down <name>` — then execute the printed commands to
    remove the worktree/stack and free the slot. It respects the teardown guards
    (won't destroy a dirty/unpushed worktree without `--force`).
+
+   **When it refuses over unpushed commits, relay both ways out.**
+   A cancelled spec is normally unlanded, so this is the one moment in the
+   lifecycle where that guard genuinely fires — and it fires about real loss.
+   The worktree is the only copy of this work: the branch is on no remote and
+   not merged into the base branch, so removing it ends it. Say that plainly,
+   relay the engine's reason, and give both endings:
+
+   ```
+   publish it first — keeps the work reachable, then re-run /spec-cancel:
+     git -C <worktreePath> push -u origin <branch>
+
+   or accept the loss (the worktree and its commits go):
+     skitterspec spec-env down <name> --force
+   ```
+
+   **Print the push; never run it.** Publishing abandoned work to a shared
+   remote is the same unasked-for act this workflow took out of `/spec-start`,
+   and it is no more wanted here — someone may well want this branch to exist
+   nowhere but their own machine. Offer the command and wait for an answer.
+
+   **Never reach for `--force` yourself either.** The engine's own message names
+   only that half, which is the whole reason this step exists: meeting a wall
+   labelled *--force to tear down anyway* at the exact moment a backup is still
+   cheap is how work gets thrown away. Both options, then stop — the choice is
+   a decision about someone's work, and it is theirs.
 
    If the plan prints a `remote branch — confirm with the user first:` section,
    **ask before running that line** — it is a `git push <remote> --delete`, and

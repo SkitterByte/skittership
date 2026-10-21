@@ -171,14 +171,14 @@ importers:
         version: 2.4.2
     devDependencies:
       '@skitterbyte/skitterspec':
-        specifier: ^18.0.0
-        version: 18.0.0
+        specifier: ^23.0.1
+        version: 23.0.1
 
 packages:
 
-  '@skitterbyte/skitterspec@18.0.0':
-    resolution: {integrity: sha512-/N08fCH17Xzihj1+dFWFGEVryo11JAsUQpGLpTr2Cf+QrVnbGE9Qk+NLzcG/Xsh1iwEGhmnTxqDRFlJXpRZNQg==}
-    engines: {node: '>=18'}
+  '@skitterbyte/skitterspec@23.0.1':
+    resolution: {integrity: sha512-iPBc29kgVY4LUaLVNnbzE5YTwVVQwbNhTsUqPxU3Cg+IjuiMBEL04rgAZrxQxEuQJjof8SzGQXvrxXqZ8VKVWg==}
+    engines: {node: '>=22.13'}
     hasBin: true
 
   kleur@3.0.3:
@@ -194,7 +194,7 @@ packages:
 
 snapshots:
 
-  '@skitterbyte/skitterspec@18.0.0':
+  '@skitterbyte/skitterspec@23.0.1':
     dependencies:
       prompts: 2.4.2
 

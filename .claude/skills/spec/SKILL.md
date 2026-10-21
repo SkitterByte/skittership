@@ -5,6 +5,11 @@ description: Create a new spec-driven-development spec. Grills the user to a cle
 
 # /spec — author a new spec
 
+> Stay silent while this runs — speak only to ask something you cannot answer
+> yourself, or to report a failure at the moment it happens. Read
+> `.claude/rules/spec-reports.md` before reporting; it defines the block this
+> skill ends with.
+
 Produce ONE concise spec in `specs/backlog/`. Do not start coding — this skill
 plans only. Implementation happens later via `/spec-start`.
 
@@ -68,25 +73,58 @@ Briefly play back the agreed understanding before writing.
 
 This skill is for **features**. For bugs, use `/spec-bug` (test-first, red→green).
 
-### Write it from the base branch
+### Write it in its own worktree
 
-**Check where you are before creating the folder.** A backlog spec belongs on
-the base branch (`main`). If you are on another spec's branch — most likely
-inside its worktree, because a design question came up part-way through
-implementing it — say so before writing, and offer to author the spec from the
-primary checkout instead.
+**Only when the project has per-spec isolation** (`specs/.core/env.config.json`
+present). Without it there is no worktree to make and this section does not
+apply — write the folder where you are standing, exactly as before.
 
-It matters for more than tidiness: a spec written inside another spec's worktree
-**physically lives on that branch**. It is not on `main` until that spec lands,
-it is invisible to anyone listing `specs/backlog/` meanwhile, and if that spec is
-cancelled the new spec is cancelled with it. Committing it there also mis-stamps
-the commit's ticket trailer, since that is resolved from the branch (see
-`.claude/rules/commit-trailers.md`, installed with a ticketing provider).
+**Provision before you write, not after.** Grilling put nothing on disk and the
+spec's name is settled by the time Phase A ends, so this is the one moment where
+a worktree costs nothing to obtain and everything is still ahead of it:
 
-**Warn, don't refuse** — doing this deliberately is legitimate, and the user may
-have a reason. If they continue, carry on exactly as normal, and mention that
-the trailer for that commit wants `spec-sync ref <new-spec-name>` rather than the
-bare form.
+```
+skitterspec spec-env up <name> --docs
+```
+
+Run the commands it prints under `to provision, run:`, and the
+`skitterspec spec-env bootstrap <name> --docs` under `then, run:` where there is
+one (it seeds the gitignored files, nothing more). Then move this session into
+the worktree with a plain `cd` — the Bash working directory persists between
+calls, so from here on the spec is written on its own branch. Confirm the move landed rather than
+reading silence as success (`.claude/rules/negative-checks.md` rule 1):
+`skitterspec spec-env resolve` with no argument must name this spec. If it does
+not, say so and write the spec where you are standing instead; a spec in the
+wrong tree is worse than a spec with no worktree.
+
+**`--docs` is what makes this cheap.** It skips the `setup` commands and the
+Docker stack — everything whose only purpose is making a tree *runnable* — so
+provisioning a worktree to write markdown in is a `git worktree add` and nothing
+else. `/spec-start` re-runs `up` over the same worktree without the flag, and the
+setup runs then, at the first moment the tree is used for code.
+
+**Why the base branch is no longer where this happens.** `main` is where work
+**lands**, not where it happens. Authoring on it meant the spec sat uncommitted
+there for as long as Phase C2's page went unanswered — which is unbounded by
+design, because a reader walking away from a diff is the normal case — and a
+release could not be cut through it. The verdict lands the spec instead, so
+`main` gains it as one commit and is never dirty on the way.
+
+**A spec written in ANOTHER spec's worktree is still the mistake it always was**,
+and this section does not soften that. It physically lives on that branch: not on
+`main` until that spec lands, invisible to anyone listing `specs/backlog/`
+meanwhile, and cancelled along with its host. Committing it there also mis-stamps
+the ticket trailer, which is resolved from the branch (see
+`.claude/rules/commit-trailers.md`, installed with a ticketing provider). The
+difference is whose worktree: **its own** is now the normal path, and someone
+else's is the accident.
+
+So if Phase A ran inside another spec's worktree — most likely because a design
+question came up part-way through implementing it — the provision above is the
+fix rather than something to warn about: it moves the session out of that tree
+and into this spec's own. Where isolation is off and there is no worktree to
+move to, **warn, don't refuse**, and say the trailer for that commit wants
+`spec-sync ref <new-spec-name>` rather than the bare form.
 
 - **Every spec is a folder** — never a bare file, even for a one-line change:
   `specs/backlog/feat-<kebab-name>/`. Create it with `mkdir -p`.
@@ -239,10 +277,169 @@ Rules for the spec body:
 
 ## Phase C — finish up
 
-After writing, tell the user the path and that it's **`Ready`** in `backlog`
-(grilling in Phase A resolved the open questions). If you deliberately left open
-questions unresolved, write `Draft` instead and say what still needs deciding.
-Either way, the next step is `/spec-start` to start building.
+Decide the status: **`Ready`** in `backlog` when grilling in Phase A resolved the
+open questions, `Draft` when you deliberately left some unresolved. Either way
+the next step is `/spec-start`. The Report section below is where all of that
+reaches the user — do not narrate it here as well.
+
+## Phase C2 — render the spec, then wait for the verdict
+
+**Only when the project has per-spec isolation** (`specs/.core/env.config.json`
+present). Without it there is no page and this phase does not exist — skip it in
+silence rather than explaining an absence.
+
+A spec is the one artefact whose whole purpose is to be
+**read before work begins**, and until now it was the only one with no reading
+surface: `/spec`
+finished, the spec sat uncommitted, and `/spec-start` had to point that out and
+commit it as a side effect of provisioning. So this phase ends where every other
+phase of the lifecycle ends — on a page, in a verdict.
+
+```
+skitterspec spec-env review <spec> --docs --buttons authoring
+```
+
+`--docs` reads the spec's own documents from the tree you are standing in, which
+after Phase B is **this spec's own worktree**. It renders
+**this spec's documents and nobody else's**: the `owned` half of
+`spec-env stage` is what supplies the file set, and it stays load-bearing even
+now that the tree holds one spec — a project's `spec.companionPaths` and a
+hand-edited `specs/.core/` both land in the same tree, and only the spec's own
+documents belong under this verdict.
+
+**This is free.** The engine reads git and splices text into a template; the
+diff never passes through you.
+
+**Never pass `--run-reviewers` here.** A spec is prose, and the reviewers
+`review.reviewers` names read code — spending a rate-limited review on a
+paragraph buys nothing. The engine refuses it on a `--docs` render whatever this
+skill asks for, so this is a note about intent rather than a guard you are
+holding: do not add the flag on the assumption that it was an oversight.
+
+**Render nothing when nothing was written.** A `⏸` run — grilling that never
+reached a shared understanding — has no spec to show, and must not ask for a
+verdict on one.
+
+**Arm nothing.** There is no `spec-env review arm` in this path, and that is a
+decision rather than an omission: the gate asserts that *a phase which ended*
+owes an answer, and a backlog spec owes no phase. A `/spec` run must leave
+`spec-env review gate --check` exiting 0.
+
+**And walking away from this page now costs nobody anything**, which is a
+stronger reason than the one that used to sit here. It read *"the spec is simply
+still uncommitted, which `/spec-start` already handles"* — true, and a
+concession: an uncommitted spec meant a dirty base branch, which is everyone's
+problem, so "arm nothing" was tolerating a mess rather than describing a clean
+state. Since Phase B the unanswered spec sits on its own branch in its own
+worktree, where it is in nothing's way: no release is blocked, no other spec has
+to replay over it, and it is still exactly where it was tomorrow morning.
+
+### The two endings this page offers
+
+`--buttons authoring` offers `Commit & Start` and `Commit` in place of the
+committing pair, because "commit and build the next phase" is meaningless for a
+spec with no phase in flight.
+
+- **`commit-start`** — hand off to `review.commitWith` (`/commit` by default),
+  passing the pathspec the render reported on `docs.paths`; **land it** (below);
+  then **keep the worktree** and run **`/spec-start <name>`**, and **stop there**.
+  It never completes or tears anything down, exactly as `commit-continue` stops
+  after `/spec-next`. This is the `commit && /spec-start` that was typed by hand.
+- **`commit`** — the same commit and the same land, then
+  **tear the worktree down** and finish. The spec stays `Ready` in `backlog` —
+  on the base branch, where anyone can see it — ready for a `/spec-start`
+  whenever it is wanted.
+
+**Both committing verdicts land, and that is what keeps the backlog findable.**
+`ls specs/backlog/` is how specs are found, and a folder bucket is only the truth
+on the branch you are standing on — so a spec left on its own branch would be
+invisible to everyone, including the next `/spec` run. The commit goes on the
+branch and then the branch goes onto the base:
+
+```
+skitterspec spec-env integrate <name>
+```
+
+It plans a rebase onto the base branch in the worktree, then a
+`merge --ff-only` in the primary checkout — run the commands it prints. It
+refuses on a dirty tree, which is correct here: the commit ran first, so anything
+still uncommitted at this point is not this spec's and the land must not proceed.
+
+**Do not run its after-land section.** Where the plan ends with
+`then, in the primary checkout (<path>), run:`, those are the project's
+`afterLand` commands — a data migration, an install — and they exist for code
+that landed. This land is documents only, so it changes nothing they would
+catch up on; `/spec-complete`, `/spec-to-main` and `/no-spec` run them.
+
+**If the rebase conflicts, stop and say so.** It is unlikely on a
+documents-only branch and not impossible — two specs authored at once can both
+touch `specs/.core/`. Run `git rebase --abort`, leave the commit sitting on the
+branch, and report `❌` with the conflict: there is a standing worktree to clear,
+which is what separates `❌` from `⏸`. Never resolve someone else's conflict to
+get the land through.
+
+**The worktree lifetime follows the verdict, and the asymmetry is deliberate.**
+`commit-start` keeps it because you are carrying straight on, and `/spec-start`
+re-runs `up` and `bootstrap` over it without `--docs`, which is where the setup commands
+Phase B skipped finally run. Plain `commit` tears it down with
+`skitterspec spec-env down <name>`, because a spec parked in the backlog should
+hold no worktree and no `node_modules`; `/spec-start` provisions from scratch
+whenever it is wanted. Always-keep would leave five backlog specs holding five
+checkouts, and always-teardown would have `commit-start` re-provision seconds
+after destroying the tree it needed.
+- **`changes`** — work the notes into the spec, record a resolution for each one
+  so the next render shows it struck through with what changed, then
+  **re-render, and wait again**. The reader is still holding a decision, so
+  ending the turn and
+  making them type `/spec-diff` would reopen the loop this exists to close.
+- **`discuss`** — report and talk. Claim nothing, change nothing.
+
+**Take the pathspec from the render, not from the tree.** A checkout is shared,
+so the set of this spec's uncommitted documents can differ between the render and
+the verdict — and the reader's conclusion is about what the page showed them.
+
+### Then wait for it
+
+**The wait is a command. Do not write one.**
+
+1. **Note the moment you start waiting**, as an ISO timestamp. That instant is
+   the whole scope of what you may claim.
+2. **Run the engine's wait, and end your turn** — under the harness's
+   persistent watch primitive where one exists, else in the background
+   (`.claude/rules/spec-reports.md` carries the preference):
+
+   ```
+   skitterspec spec-env review wait <spec> --since <the timestamp>
+   ```
+
+   It takes no timeout unless you pass one, and you must not pass one: a reader
+   who walks away from a spec is the normal case, and a bounded watch once lost a
+   verdict to a lunch break.
+3. **On waking, let the engine pick:**
+
+**A watch that dies is re-armed on the same window**, silently and bounded by
+the age of that window — `.claude/rules/spec-reports.md` carries the contract,
+including when to stop and what the banner says instead. Do not restate it
+here.
+
+   ```
+   skitterspec spec-env review <spec> --docs --claim-since <the timestamp> --json
+   ```
+
+   It claims the one pass that arrived inside the window, acts on nothing when
+   none did, and refuses to choose when two did.
+4. **Route on the verdict** as above.
+
+**Where the page is `file://`** — the engine could not serve — there is no server
+to POST to, so the pass is copied and pasted and the reader's next message is
+what carries it. **Do not start a watch that cannot fire**: a wait on the pending
+store would spin forever while the report underneath it claimed to be holding,
+which is the exact failure `.claude/rules/spec-reports.md` records. The wait is
+the turn ending, and the banner says so.
+
+Relay the engine's **stack** — the `local:`, `network:` and `remote:` lines, all
+three, in that order — never the bare `page:` path. `.claude/rules/spec-reports.md`
+carries the shape and why every tier is named rather than one being chosen.
 
 ## Phase D — record the isolation stack (only if configured)
 
@@ -278,3 +475,71 @@ below (nothing to do here without one).
 
 
 
+
+## Report
+
+End with the block defined in `.claude/rules/spec-reports.md`. That file carries
+the shape; this section carries only what is specific here.
+
+**Verdicts**
+
+- `✅` — a `Ready` spec is written to `specs/backlog/<name>/`.
+- `⚠️` — written as `Draft`; open questions were deliberately left. Name them.
+- `❌` — the spec was committed and the land failed part-way: the rebase
+  conflicted, or the fast-forward was refused. There is a standing worktree and a
+  branch to deal with, so say where both are.
+- `⏸` — grilling did not reach a shared understanding, so nothing was written.
+  That is the skill working: a spec written over an unresolved requirement is
+  the outcome Phase A exists to prevent.
+
+**Fields:** `Tracker` · `Spec` · `Built` · `Landed` · `Worktree` · `Follow-ups` ·
+`Next`
+
+`Built` is the spec's path and phase count; `Spec` is its status and bucket;
+`Tracker` appears only when a provider is installed and linked it.
+
+`Landed` and `Worktree` belong to the **verdict** half of the run and appear
+only once one has been acted on — a run that is still waiting on the page has
+neither. `Landed` says the base branch fast-forwarded and to what; `Worktree`
+says kept (on `commit-start`) or removed (on `commit`), with the path. Neither
+appears where isolation is off: nothing was provisioned and nothing was landed.
+
+**`Next` depends on whether Phase C2 rendered a page.** Where it did, the run is
+waiting on a verdict, so the block **omits the `Review` row** and ends on the
+banner defined in `.claude/rules/spec-reports.md` — counts, the tier stack, and
+this page's two exits:
+
+---
+
+## ⏸ Review ready — &lt;N&gt; files, +&lt;a&gt; −&lt;d&gt;
+
+- **local** — &lt;the `local:` URL&gt;
+- **network** — &lt;the `network:` URL, or off with the command that turns it on&gt;
+- **remote** — &lt;the `remote:` URL, or off with the command that turns it on&gt;
+
+I'm holding here until you send a verdict — the wait covers local and network.
+
+`Commit & Start` puts it in flight · `Commit` keeps it for later
+
+---
+
+There `Next` names the page rather than a command, because the button is what
+carries the work on.
+
+**Neither exit leaves the spec anywhere awkward**, and the banner does not
+explain that — the whole point of Phase B is that there is nothing to warn
+about. Both buttons commit and land, so either way the spec reaches the base
+branch as one commit; the only difference is whether the worktree stays.
+
+Where no page was rendered — isolation is not configured, or nothing was
+written — `Next` is `/spec-start <name>`, with the name spelled the way it must
+be typed.
+
+**A spec written without a page is still uncommitted**, so that `Next` relies on
+`/spec-start` committing the spec when it is all that is uncommitted. Say
+`/commit, then /spec-start <name>` when anything else is uncommitted too, or the
+row sends the reader to a refusal.
+
+**`Follow-ups` is almost always `none` here.** This skill's whole job is to
+capture work, so anything it surfaced belongs in the spec it just wrote rather
+than in a follow-up line beneath it.
