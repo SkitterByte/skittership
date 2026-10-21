@@ -2,7 +2,7 @@
 
 > **Type:** Feature
 > **Name:** feat-empty-release-notes
-> **Status:** In Progress — all phases done (started 2026-10-21)
+> **Status:** Complete (2026-10-21)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-10-21
@@ -72,7 +72,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 
 ## Open questions
 
-- [ ] None
+- [x] None
 
 ## State log
 
@@ -80,6 +80,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 |------|--------|--------|----|
 | 2026-10-21 | Ready | backlog | Reuben Greaves |
 | 2026-10-21 | In Progress | in-progress | Reuben Greaves |
+| 2026-10-21 | Complete | complete | Reuben Greaves |
 
 ## Changelog
 
@@ -93,3 +94,4 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   beside the stale-section test they amend; `retro-default.test.js` needed no
   change. `.claude/rules/commit-messages.md` is a symlink to the asset, so the
   rule edit needed no copy.
+- 2026-10-21 — Completed; all phases done, tests green.
