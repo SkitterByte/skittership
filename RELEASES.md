@@ -5,6 +5,17 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.1.0 — 21 Oct 2026
+
+**Highlights:** You can now cut a hotfix as v1.2.3-hotfix.1 with npm run release:hotfix: exactly the prod release plus the fix, never a patch number test or demo may already use. If you edited the shipped release scripts, update keeps your copies, so run update --force and re-apply your edits. That also points release:hotfix at the new script.
+
+### Release tooling
+- **New** — Backfilling your release notes with releases:retro now gives every past release an entry, including those with no user-facing changes, instead of leaving gaps between versions.
+- **New** — Every release now gets an entry in your release notes, even one with nothing user-facing. It reads "No user-facing changes in this release.", so the newest entry always matches the version you shipped. Set releases.emptyRelease to change the wording, or to false to keep the old behaviour.
+- **New** — You can now cut a hotfix as v1.2.3-hotfix.1 with npm run release:hotfix: exactly the prod release plus the fix, never a patch number test or demo may already use. If you edited the shipped release scripts, update keeps your copies, so run update --force and re-apply your edits. That also points release:hotfix at the new script.
+- **Fixed** — Changelogs and release notes now start from the release your branch actually builds on, so a second hotfix no longer repeats the first one. After a hotfix, the next main release lists the cherry-picked fix again, since environments that deploy main get it only then. Set RELEASE_BASE_TAG to choose the base yourself.
+- **Fixed** — Hotfix releases named like 1.2.0-hotfix.2 now appear in the right order in the changelog and release notes, newest first, instead of landing below an earlier hotfix.
+
 ## 2.0.7 — 13 Oct 2026
 
 ### Release tooling
