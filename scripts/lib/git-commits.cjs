@@ -350,18 +350,66 @@ function escapeRegex(value) {
 }
 
 /**
- * Compare two dotted version strings numerically: >0 when `a` is newer.
+ * A version as it appears in a section heading: dotted numbers plus an
+ * optional `-suffix` (`36.4.0`, `36.4.0-hotfix.2`, `2.0.0-rc.1`). A regex
+ * SOURCE, for embedding in the generators' heading patterns.
+ */
+const VERSION_PATTERN = '\\d+(?:\\.\\d+)*(?:-[0-9A-Za-z.-]+)?'
+
+/**
+ * Compare two version strings: >0 when `a` is newer.
  *
- * Deliberately not a full semver implementation — this project's tags are
- * plain `major.minor.patch`, and the only job here is keeping generated
- * sections in descending order. Pre-release suffixes are not handled.
+ * Ordering, for a given `X.Y.Z`:
+ *
+ *   X.Y.Z-rc.1 < X.Y.Z < X.Y.Z-hotfix.1 < X.Y.Z-hotfix.2 < X.Y.(Z+1)
+ *
+ * A `-hotfix.N` suffix sorts AFTER its base — deliberately the opposite of
+ * semver, because a hotfix is cut after the release it patches and must list
+ * above it. This matches `git tag --sort=-version:refname` with no
+ * `versionsort.suffix` configured. Every other suffix is a pre-release and
+ * sorts BEFORE its base, as semver says. Build metadata (`+…`) is ignored.
  */
 function compareVersions(a, b) {
-  const pa = String(a).split('.').map((n) => Number.parseInt(n, 10) || 0)
-  const pb = String(b).split('.').map((n) => Number.parseInt(n, 10) || 0)
-  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
-    const diff = (pa[i] || 0) - (pb[i] || 0)
+  const va = splitVersion(a)
+  const vb = splitVersion(b)
+  for (let i = 0; i < Math.max(va.core.length, vb.core.length); i += 1) {
+    const diff = (va.core[i] || 0) - (vb.core[i] || 0)
     if (diff !== 0) return diff
+  }
+  if (va.rank !== vb.rank) return va.rank - vb.rank
+  return compareIdentifiers(va.ids, vb.ids)
+}
+
+// rank: -1 pre-release, 0 plain release, 1 hotfix. `ids` are the suffix's
+// identifiers after the `hotfix` marker (or all of them for a pre-release).
+function splitVersion(version) {
+  const [main] = String(version).replace(/^v/, '').split('+')
+  const dash = main.indexOf('-')
+  const coreText = dash === -1 ? main : main.slice(0, dash)
+  const suffix = dash === -1 ? '' : main.slice(dash + 1)
+  const core = coreText.split('.').map((n) => Number.parseInt(n, 10) || 0)
+  if (!suffix) return { core, rank: 0, ids: [] }
+  const ids = suffix.split('.')
+  if (ids[0] === 'hotfix') return { core, rank: 1, ids: ids.slice(1) }
+  return { core, rank: -1, ids }
+}
+
+// Semver identifier precedence: numeric ids compare numerically and sort
+// below alphanumeric ones; otherwise lexically; a longer list wins a tie.
+function compareIdentifiers(ia, ib) {
+  for (let i = 0; i < Math.max(ia.length, ib.length); i += 1) {
+    if (ia[i] === undefined) return -1
+    if (ib[i] === undefined) return 1
+    const na = /^\d+$/.test(ia[i])
+    const nb = /^\d+$/.test(ib[i])
+    if (na && nb) {
+      const diff = Number(ia[i]) - Number(ib[i])
+      if (diff !== 0) return diff
+    } else if (na !== nb) {
+      return na ? -1 : 1
+    } else if (ia[i] !== ib[i]) {
+      return ia[i] < ib[i] ? -1 : 1
+    }
   }
   return 0
 }
@@ -382,6 +430,7 @@ function indexOfOlderSection(content, version, headingRegex) {
 }
 
 module.exports = {
+  VERSION_PATTERN,
   compareVersions,
   countCommitsSince,
   tagExists,

@@ -114,7 +114,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 
 | # | Phase | Status | File |
 |---|-------|--------|------|
-| 1 | Suffix-aware ordering in generators | ⬜ | [01-suffix-ordering.md](01-suffix-ordering.md) |
+| 1 | Suffix-aware ordering in generators | ✅ | [01-suffix-ordering.md](01-suffix-ordering.md) |
 | 2 | Nearest-ancestor changelog base | ⬜ | [02-ancestor-base.md](02-ancestor-base.md) |
 | 3 | `release:hotfix` command | ⬜ | [03-release-hotfix-command.md](03-release-hotfix-command.md) |
 | 4 | Install, upgrade path and docs | ⬜ | [04-install-and-docs.md](04-install-and-docs.md) |
@@ -140,3 +140,6 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 - 2026-10-21 — Chose option (a), the nearest-ancestor base, over keeping
   sort + cherry-pick. This knowingly reverses the default-path dedupe from
   bug-hotfix-duplicate-changelog.
+- 2026-10-21 — Phase 1: `nextFreePatch` now advises the next free
+  `-hotfix.N` when a hotfix version collides, instead of a patch, because a
+  patch is exactly what the scheme avoids.

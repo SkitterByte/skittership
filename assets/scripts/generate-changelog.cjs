@@ -24,6 +24,7 @@ const {
   parseCommit,
   countCommitsSince,
   tagExists,
+  VERSION_PATTERN,
 } = require('./lib/git-commits.cjs')
 const { loadConfig } = require('./lib/config.cjs')
 
@@ -147,8 +148,11 @@ function upsertSection(changelogContent, newSection, version) {
   // Insert above the first section OLDER than this one, so sections stay in
   // descending version order regardless of the order they are written in.
   // Retro-fill walks oldest-first, so "insert above whatever is currently
-  // first" would leave the oldest release on top.
-  const olderIdx = indexOfOlderSection(changelogContent, version, /\n## \[(\d[\d.]*)\]/)
+  // first" would leave the oldest release on top. The heading must capture a
+  // suffixed version whole: `[36.4.0-hotfix.1]` read as no-match let
+  // hotfix.2 land below it, above `[36.4.0]`.
+  const headingRe = new RegExp(`\\n## \\[(${VERSION_PATTERN})\\]`)
+  const olderIdx = indexOfOlderSection(changelogContent, version, headingRe)
   if (olderIdx >= 0) {
     const before = changelogContent.slice(0, olderIdx).replace(/\s+$/, '')
     const after = changelogContent.slice(olderIdx + 1)

@@ -99,10 +99,22 @@ function tagNames(dir) {
     .filter(Boolean)
 }
 
-/** The lowest patch above `version` in the same major.minor with no tag. */
+/**
+ * The lowest patch above `version` in the same major.minor with no tag.
+ *
+ * A `-hotfix.N` version advances N instead: its next free version is the next
+ * hotfix of the same base, never a patch that test/demo may already own.
+ */
 function nextFreePatch(dir, version, prefix) {
-  const [major, minor, patch] = version.split('.').map((n) => Number.parseInt(n, 10))
   const taken = new Set(tagNames(dir))
+  const hotfix = /^(\d+\.\d+\.\d+)-hotfix\.(\d+)$/.exec(version)
+  if (hotfix) {
+    let n = Number.parseInt(hotfix[2], 10) + 1
+    while (taken.has(`${prefix}${hotfix[1]}-hotfix.${n}`)) n += 1
+    return `${hotfix[1]}-hotfix.${n}`
+  }
+  const root = version.split(/[-+]/)[0]
+  const [major, minor, patch] = root.split('.').map((n) => Number.parseInt(n, 10))
   let next = patch + 1
   while (taken.has(`${prefix}${major}.${minor}.${next}`)) next += 1
   return `${major}.${minor}.${next}`
