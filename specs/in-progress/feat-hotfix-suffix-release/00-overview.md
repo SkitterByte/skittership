@@ -2,9 +2,9 @@
 
 > **Type:** Feature
 > **Name:** feat-hotfix-suffix-release (the spec folder name — the handle you paste into `/spec-start`)
-> **Status:** Ready — not started
+> **Status:** In Progress — Phase 1 (started 2026-10-21)
 > **Author:** Reuben Greaves
-> **Developer:** —
+> **Developer:** Reuben Greaves
 > **Raised:** 2026-10-21
 > **Area:** assets/scripts/lib/git-commits.cjs, assets/scripts/lib/config.cjs, assets/scripts/generate-changelog.cjs, assets/scripts/generate-releases.cjs, assets/scripts/check-release-index.cjs, assets/scripts/release-hotfix.cjs (new), src/init.js, README.md
 > **Stack:** worktree
@@ -128,6 +128,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 | Date | Status | Folder | By |
 |------|--------|--------|----|
 | 2026-10-21 | Ready | backlog | Reuben Greaves |
+| 2026-10-21 | In Progress | in-progress | Reuben Greaves |
 
 ## Changelog
 
