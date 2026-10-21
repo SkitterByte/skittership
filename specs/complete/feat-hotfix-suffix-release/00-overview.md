@@ -2,7 +2,7 @@
 
 > **Type:** Feature
 > **Name:** feat-hotfix-suffix-release (the spec folder name — the handle you paste into `/spec-start`)
-> **Status:** In Progress — Phase 1 (started 2026-10-21)
+> **Status:** Complete (2026-10-21)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-10-21
@@ -129,6 +129,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 |------|--------|--------|----|
 | 2026-10-21 | Ready | backlog | Reuben Greaves |
 | 2026-10-21 | In Progress | in-progress | Reuben Greaves |
+| 2026-10-21 | Complete | complete | Reuben Greaves |
 
 ## Changelog
 
@@ -159,3 +160,6 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   the release note warns ereqs, whose mapping also handles `--finish`. The
   only open task is the phase's own commit, which carries the
   `Release-Note!:`.
+- 2026-10-21 — Completed; all phases done, tests green (228/228). Not done
+  here, by design: skitterspec (handoff 2) calling `release:hotfix`, and
+  ereqs switching its mapping and running `update --force`.
