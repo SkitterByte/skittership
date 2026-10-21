@@ -26,6 +26,15 @@ test('returns defaults when no config file is present', () => {
   assert.strictEqual(cfg.releases.file, 'RELEASES.md')
   assert.deepStrictEqual(cfg.releases.scopeAreas, {})
   assert.strictEqual(cfg.versionHook, true)
+  assert.deepStrictEqual(cfg.hotfix, { branchPrefix: 'hotfix/' })
+})
+
+test('hotfix.branchPrefix merges over the default, and a blank one is ignored', () => {
+  const dir = tmpDir()
+  writeConfig(dir, { hotfix: { branchPrefix: ' release/ ' } })
+  assert.strictEqual(loadConfig(dir).hotfix.branchPrefix, 'release/')
+  writeConfig(dir, { hotfix: { branchPrefix: '  ' } })
+  assert.strictEqual(loadConfig(dir).hotfix.branchPrefix, 'hotfix/')
 })
 
 test('defaults productName to the repo dir basename', () => {

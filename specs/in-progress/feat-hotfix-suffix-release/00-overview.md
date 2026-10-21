@@ -116,7 +116,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 |---|-------|--------|------|
 | 1 | Suffix-aware ordering in generators | ✅ | [01-suffix-ordering.md](01-suffix-ordering.md) |
 | 2 | Nearest-ancestor changelog base | ✅ | [02-ancestor-base.md](02-ancestor-base.md) |
-| 3 | `release:hotfix` command | ⬜ | [03-release-hotfix-command.md](03-release-hotfix-command.md) |
+| 3 | `release:hotfix` command | ✅ | [03-release-hotfix-command.md](03-release-hotfix-command.md) |
 | 4 | Install, upgrade path and docs | ⬜ | [04-install-and-docs.md](04-install-and-docs.md) |
 
 ## Open questions
@@ -148,3 +148,8 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   its history, so it keeps the "all history through the tag" path. A
   `RELEASE_BASE_TAG` that names a missing tag also refuses. Before, it would
   have hit the catch-all and listed all history.
+- 2026-10-21 — Phase 3: added two refusals. The command refuses when HEAD
+  is already tagged as a release, which would cut an empty hotfix, and when
+  the base tag carries a non-hotfix suffix. Found during the build:
+  `serializeConfig` (`src/init.js`) writes only known keys, so `init` would
+  drop a user's `hotfix` block. That fix was added to phase 4.

@@ -13,6 +13,10 @@ copies are kept safely, and the scheme is documented.
       `--force`).
 - [ ] Dogfood: copy the script into this repo's `scripts/`, matching how the
       other generators are mirrored.
+- [ ] Carry the `hotfix` block through `releaseFromConfig`/`serializeConfig`
+      (`src/init.js`), so `init` never drops a user's `branchPrefix`. Write
+      it only when it differs from the default, so existing configs stay
+      byte-identical. Test both cases.
 - [ ] README: document the command, flags, the `v<base>-hotfix.<N>` scheme,
       the ordering, the nearest-ancestor base, `RELEASE_BASE_TAG`, and the
       `postversion` refusal. `assets/rules/commit-messages.md` does not

@@ -14,8 +14,12 @@
  *     "changelog": { "enabled": true, "file": "CHANGELOG.md" },
  *     "releases":  { "enabled": true, "file": "RELEASES.md",
  *                    "productName": "<repo name>", "scopeAreas": {} },
- *     "versionHook": true
+ *     "versionHook": true,
+ *     "hotfix":    { "branchPrefix": "hotfix/" }
  *   }
+ *
+ * `hotfix.branchPrefix` is the branch prefix `release-hotfix.cjs` requires
+ * before it will cut a `-hotfix.N` version.
  */
 
 const { readFileSync } = require('node:fs')
@@ -35,6 +39,7 @@ const DEFAULT_CONFIG = Object.freeze({
     scopeAreas: Object.freeze({}),
   }),
   versionHook: true,
+  hotfix: Object.freeze({ branchPrefix: 'hotfix/' }),
 })
 
 function isObject(value) {
@@ -52,6 +57,7 @@ function defaultsFor(dir) {
       scopeAreas: {},
     },
     versionHook: true,
+    hotfix: { branchPrefix: 'hotfix/' },
   }
 }
 
@@ -87,6 +93,12 @@ function mergeConfig(base, parsed) {
     }
     if (isObject(parsed.releases.scopeAreas)) {
       base.releases.scopeAreas = { ...parsed.releases.scopeAreas }
+    }
+  }
+
+  if (isObject(parsed.hotfix)) {
+    if (typeof parsed.hotfix.branchPrefix === 'string' && parsed.hotfix.branchPrefix.trim()) {
+      base.hotfix.branchPrefix = parsed.hotfix.branchPrefix.trim()
     }
   }
 
