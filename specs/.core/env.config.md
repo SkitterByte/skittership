@@ -143,6 +143,10 @@ through to a documented conservative default; see the field notes below.
   // exits non-zero; [] = none. Each string is a shell command; {slug}/{branch}/{worktreePath}/{projectName}/{portOffset}
   // expand (the cwd is already the worktree, so {worktreePath} is usually
   // redundant). Example: ["pnpm install --frozen-lockfile"].
+  // An entry may also be { "run": "<cmd>", "when": ["<glob>", ...] }. `when` is
+  // IGNORED here — a fresh worktree always runs every setup step — and exists
+  // so `afterLand` can re-run that step after a land that changes its inputs
+  // (`{ "setup": true }`, below).
   "setup": [],
 
   // Commands to run in the PRIMARY checkout after a land — the counterpart of
@@ -153,13 +157,58 @@ through to a documented conservative default; see the field notes below.
   //   `spec-env integrate` prints them after the fast-forward (worktree and
   //   checkout mode), and also after "already landed" — a land on another
   //   machine leaves them pending here. `spec-env hotfix land` prints them
-  //   after the cherry-pick onto the base branch, and not at all when
-  //   `hotfix.cherryPickMain` is false, since the base gained nothing.
+  //   after a carry that moved the base branch, and not at all when it moved
+  //   nothing (held, already carried, or `hotfix.cherryPickMain` false).
   // The engine only plans: /spec-complete, /spec-to-main and /no-spec run
   // them (a /spec documents-only land does not). They stop at the first
   // failure, report it as a caveat, and never undo the land or block
   // teardown. Literal strings — tokens are NOT expanded, because they run on
   // the base branch where a spec's {slug} or {portOffset} mean nothing.
+  //
+  // CONDITIONAL ENTRIES. A plain string always runs. An entry may instead be
+  // { "run": "<cmd>", "when": ["<glob>", ...] } (a single string `when` is
+  // fine), which runs only when the land changes a file one of its globs
+  // matches — so a generate or an install costs nothing on a land that does
+  // not need it, and is not forgotten on one that does:
+  //
+  //   "afterLand": [
+  //     { "run": "pnpm install --frozen-lockfile", "when": ["pnpm-lock.yaml", "**/package.json"] },
+  //     { "run": "pnpm run db:generate", "when": ["prisma/schema.prisma"] },
+  //     "pnpm db:data-migration"
+  //   ]
+  //
+  // Globs are repo-relative: `*` stays within a directory, `**` crosses them
+  // (`**/package.json` matches the root one too), `?` is one character. An
+  // entry whose `when` holds no usable glob is DROPPED, never widened to
+  // always-run.
+  //   The changed files are what the land brings into the base branch:
+  //   `base...branch` for `integrate` (read before the rebase, so it is the
+  //   branch's own changes), and the carried fix commits — minus the release's
+  //   version commit — for `hotfix land`.
+  //   When that cannot be known, the conditional entries RUN. That is the
+  //   "already landed" plan (the land happened elsewhere, so its range is not
+  //   here) and any diff git would not answer. A redundant generate costs
+  //   seconds; a skipped one leaves the base red with nothing pointing at why.
+  //   A land that changed no files is known, not unknown, and skips them.
+  // The plan says why for every entry: a matched one ends in
+  // `# <path> changed`, an unknown one in `# range unknown` with a line saying
+  // so, and the rest are listed under `skipped (nothing in the land matched):`
+  // with their globs. The reason is a shell comment, so a line run as printed
+  // stays one command. Skipped lines are information — run only the list
+  // under `then, … run`.
+  //
+  // REUSING A SETUP STEP. `{ "setup": true }` expands, in place, to every
+  // `setup` entry that declares `when`, so the trigger lives in one list:
+  //
+  //   "setup": [
+  //     { "run": "pnpm install --frozen-lockfile", "when": ["pnpm-lock.yaml", "**/package.json"] },
+  //     { "run": "pnpm run db:generate", "when": ["prisma/schema.prisma"] }
+  //   ],
+  //   "afterLand": [{ "setup": true }, "pnpm db:data-migration"]
+  //
+  // Plain setup strings carry no trigger and are never pulled in. The command
+  // is copied literally — afterLand expands no tokens — so a setup step that
+  // relies on {slug}-style tokens is a poor one to reuse.
   "afterLand": [],
 
   // Host dev servers `spec-env dev up <spec>` starts on the spec's port block
@@ -218,7 +267,16 @@ through to a documented conservative default; see the field notes below.
   // deliberate: the file it names then belongs to some other spec, and the safe
   // failure is a refusal you clear with /commit, not a stranger's file swept
   // into your commit. Default: none — a spec owns only its own folder.
-  
+  //
+  // THIS DISTRIBUTION SEEDS BOTH KEYS. `skitterspec init --isolation` writes an
+  // `env.config.json` already carrying
+  // `"companionPaths": ["specs/.core/github-base/{identifier}.base.json"]` and
+  // `"identifierField": "github_identifier"`, because the GitHub snapshot is
+  // written by this package, and only this package knows where. What follows is
+  // the base engine's default — what you get if you clear them.
+  //
+  // Both or neither: `{identifier}` resolves through `branch.identifierField`,
+  // so `companionPaths` on its own expands to nothing and owns nothing.
   "spec": {
     "companionPaths": []
   },
@@ -267,14 +325,41 @@ through to a documented conservative default; see the field notes below.
   },
 
   // Hotfix landing (`spec-env hotfix land` / `/spec-complete` on a Type: Hotfix
-  // spec). A hotfix forks from a release tag and lands by tag + cherry-pick, not
-  // fast-forward. `bump` is the version-bump strategy for the new deploy tag (only
-  // "patch" today: v33.16.4 -> v33.16.5). `cherryPickMain` also cherry-picks the
-  // fix onto the base branch for the next release (default true). `targets` is an
-  // optional default list of extra base tags to also patch (test/demo lines);
-  // `--also <tag>` adds more at run time. Nothing is ever pushed — you push the
-  // deploy tag to trigger CI/CD. Default: patch, main, none.
+  // spec). A hotfix forks from a release tag and lands by release + push + carry,
+  // not fast-forward; `hotfix land` runs those steps itself, in that order.
+  //
+  // `releaseWith` is a command run IN THE HOTFIX WORKTREE that cuts the release —
+  // its version commit and its tag — and prints ONE JSON line on stdout:
+  // {"tag","version","baseTag","branch","versionCommit","pushed"}. skittership
+  // 2.1+ ships one: "node scripts/release-hotfix.cjs --json" (call node directly
+  // rather than through `pnpm run`, so no run banner reaches stdout; anything but
+  // the JSON line is a refusal). skitterspec never passes it `--push`, since it
+  // owns the push. skittership refuses a branch outside its `hotfix.branchPrefix`
+  // (default `hotfix/`) — the default `branch.pattern` already gives
+  // `hotfix/<slug>` — and refuses a package.json with a `postversion` script
+  // unless the command says `--allow-postversion`; add that yourself if you have
+  // one. Empty (the default) = the built-in tagger.
+  //
+  // `bump` is the built-in tagger's strategy: "patch" (v33.16.4 -> v33.16.5) or
+  // "hotfix-suffix" (v33.16.4 -> v33.16.4-hotfix.1, then -hotfix.2, ...). Under
+  // either, a base that is already a hotfix tag continues its line
+  // (v36.2.3-hotfix.4 -> v36.2.3-hotfix.5), so "patch" never takes a number the
+  // mainline owns. When the patch tag already exists, the refusal names the
+  // free hotfix tag that "hotfix-suffix" would cut. Any other value is refused
+  // when `hotfix land` runs. Tags order X.Y.Z-rc.N < X.Y.Z < X.Y.Z-hotfix.N <
+  // X.Y.(Z+1), the same as skittership.
+  //
+  // `cherryPickMain` carries the fix onto the base branch for the next release
+  // (default true) — its commits minus the version commit and minus anything the
+  // base already has. `targets` is an optional default list of extra base tags to
+  // also patch (test/demo lines); `--also <tag>` adds more at run time. Targets
+  // are TAG-ONLY: they get the built-in tagger, never `releaseWith`, and are not
+  // pushed. The prod release is pushed (branch, then tag, to origin) only on
+  // `hotfix land --push`; without it the land holds before the carry. The
+  // worktree stays until `spec-env hotfix finish`. Default: built-in patch tag,
+  // carry to main, no targets.
   "hotfix": {
+    "releaseWith": "",
     "bump": "patch",
     "cherryPickMain": true,
     "targets": []

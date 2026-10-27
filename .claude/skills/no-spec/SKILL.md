@@ -174,7 +174,10 @@ three, in that order — never the bare `page:` path.
   **Between the two, run the after-land commands.** Where the `integrate` plan
   ends with a `then, in the primary checkout (<path>), run:` section — the
   project's `afterLand` — run those commands there, in order, once the
-  fast-forward has succeeded, and on an already-landed no-op too. A lockfile
+  fast-forward has succeeded, and on an already-landed no-op too. Run only the
+  lines under that heading; a `skipped (nothing in the land matched):` block
+  lists conditional entries this land did not need, and is information, never
+  commands. A lockfile
   refresh is exactly the land that needs them.
   **Stop at the first non-zero exit**: the run becomes `⚠️`, naming the command that failed and the ones that
   did not run, and it **never undoes the land and never stops the `down`**.
@@ -205,8 +208,8 @@ the shape; this section carries only what is specific here.
 
 - `✅` — the work is done, the tests are green, and the verdict was acted on.
 - `⚠️` — done and green, with something worth knowing — an after-land command
-  that failed, for one. `Notes` carries what the after-land commands ran, or
-  where they stopped; nothing about them when none are configured.
+  that failed, for one. `Notes` carries what the after-land commands ran and
+  skipped, or where they stopped; nothing about them when none are configured.
 - `❌` — the tests are red, or the land failed part-way. Quote the failure and
   say what is standing.
 - `⏸` — refused before acting: no name given, the name is already a spec, the

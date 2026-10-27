@@ -1,0 +1,18 @@
+{
+  "github": {
+    "owner": "SkitterByte",
+    "repo": "skitterspec",
+    "project": 7,
+    "statusField": "Status",
+    "labels": { "spec": "spec", "phase": "phase" }
+  },
+  "states": {
+    "backlog": "Backlog",
+    "in-progress": "In Progress",
+    "complete": "Done",
+    "cancelled": "Cancelled"
+  },
+  "intake": { "label": "", "bugLabels": ["bug"], "hotfixLabels": [] },
+  "auth": { "tokenEnv": "GITHUB_TOKEN" },
+  "sync": { "fieldOwnership": { "assignee": "push" } }
+}

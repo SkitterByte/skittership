@@ -82,7 +82,7 @@ function findEngine(projectDir) {
   if (process.env.SKITTERSPEC_BIN) return process.env.SKITTERSPEC_BIN
   let at = projectDir
   for (let i = 0; i < 6 && at; i++) {
-    for (const name of ['skitterspec', 'skitterspec-linear']) {
+    for (const name of ['skitterspec', 'skitterspec-linear', 'skitterspec-jira', 'skitterspec-github', 'skitterspec-azure-boards']) {
       const candidate = path.join(at, 'node_modules', '.bin', name)
       if (fs.existsSync(candidate)) return candidate
     }

@@ -50,6 +50,6 @@
     "url": "git+https://github.com/SkitterByte/skittership.git"
   },
   "devDependencies": {
-    "@skitterbyte/skitterspec": "^23.0.1"
+    "@skitterbyte/skitterspec-github": "^1.2.0"
   }
 }

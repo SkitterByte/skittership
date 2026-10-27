@@ -258,11 +258,118 @@ branch is already here.
 - Set the **Status** header: `> **Status:** In Progress — Phase 1 (started <YYYY-MM-DD>)`.
 - Set **Developer** if it is still `—` (`git config user.name`).
 
+**Only when all three hold**: `specs/.core/github.config.json` exists, the repo
+**owns** `assignee` in its `sync.fieldOwnership`, and the spec carries a
+`github_identifier`. Any one missing → skip this step silently and carry on; a
+project that declined must see no trace of assignment.
 
+Ownership is the **value**, not the key: `assignee` is owned by default, and
+`"none"` is how a project declines it. Testing whether the key is *present* would
+read as opted-in everywhere, since the default puts it in every config.
+
+**Never blocks, never fails the skill.** Everything below is best-effort: the
+branch is provisioned and the spec is moving either way, and an unassigned issue
+is a cosmetic gap that `/spec-claim` closes later.
+
+1. **Work out who you are.** Run `skitterspec spec-sync whoami --json`.
+   - `ok: true` → use `id` and `name`. Nothing to ask.
+   - `source: "mcp"` or the command reports no token → call the discovered
+     `get_me` tool, then cache its login:
+     `skitterspec spec-sync whoami --set <id> --name "<name>"`.
+   - `ok: false` → identity is **unknown**, which is an ordinary state (a shared
+     or bot key, an offline machine). Go to step 2.
+2. **Unknown identity — three states, not two.** Decide by what is actually
+   reachable, and route the third to inaction:
+   - **GitHub reachable *and* this is an interactive session** → offer a short
+     user search (`skitterspec spec-sync users <name-or-email>`, or the
+     user-list tool on MCP), let the operator pick, and offer to cache it with
+     `whoami --set` so this is asked once per machine rather than once per spec.
+   - **Not reachable, or not interactive** → say so in one line
+     (`assignment skipped — no GitHub identity`) and **carry on**. Do not prompt
+     for something you could not act on, and never stall a `/spec-start` on it.
+3. **Record it on the spec** — through the engine, never by hand-editing
+   frontmatter:
+
+   ```
+   skitterspec spec-sync assign <spec> --to <login> --name "<display name>"
+   ```
+
+4. **Leave `> **Developer:**` as `git config user.name`** — the step above this
+   seam already set it, and this seam must not overwrite it with the tracker's
+   display name.
+
+   Those two names are the same person and often not the same string, and the
+   git one is the one everything else in the spec already uses: `Author:`, every
+   **State log** `By` row, and every commit. Writing the tracker's name into this
+   one field would leave a spec whose own audit trail contradicts its header —
+   a worse problem than the one it would solve. Anyone wanting a different name
+   on their specs sets `git config user.name`, and it stays consistent
+   everywhere.
+
+   The header names **who is building this**; the stamp in step 3 names
+   **which tracker account it is assigned to**. They answer different questions,
+   so they need not be the same string. The one place that reasoning does not hold
+   is handing a spec to *someone else* — there is no local git name for them —
+   and that case belongs to `/spec-claim --to`, which sets the header from the
+   tracker deliberately.
+
+**Nothing is pushed here.** `assign` writes the repo only, and the refresh these
+skills already run sends it. Assignment is an ordinary field of the projection,
+not a side errand with its own network call.
+
+**There is no unassign step anywhere.** The projection derives the assignee from
+the spec's lifecycle bucket, so `/spec-complete` and `/spec-cancel` release the
+issue through the push they already make. The stamp deliberately stays in the
+file: who actioned the work outlives who is currently holding it.
 
 - Append a **State log** row: `| <YYYY-MM-DD> | In Progress | in-progress | <git user.name> |`.
 
+**Only when `specs/.core/github.config.json` exists** and the spec's overview
+carries a `github_identifier`. Either missing → **skip**, in one line
+(`not linked to GitHub — /spec-push to mirror it`), and carry on. Nothing else in
+this step changes.
 
+**Refresh the mirror now, without asking.** Run `/spec-push`. The spec has just
+moved to `in-progress/` and been stamped with a developer — two real state
+changes, and the tracker is a generated mirror of them. It costs one engine call
+and no model tokens when a GitHub token is set (see `apply.transport` in
+`github.config.md`).
+
+- **Never mint.** An unlinked spec is skipped, not created. A spec kept
+  deliberately local should stay that way — `/spec-push` is how someone opts in.
+- **Never fatal.** If the push fails — offline, no token, a GitHub error — say so
+  and **finish the operation anyway**. The spec is in flight in the repo
+  regardless; the mirror is disposable and the next push repairs it. Do not roll
+  the provisioning back, and do not stop to ask.
+- **Say what happened** in the skill's report: mirror updated, skipped as
+  unlinked, or failed with the reason.
+
+### Why it sits here
+
+Pinned **after the `git mv` and before the commit**, and both halves matter:
+
+- **After the move**, because the projection reads a spec's workflow state from
+  its folder bucket. Push while the folder is still in `backlog/` and the issue
+  is set to the state the spec is *leaving*.
+- **Before the commit**, because the push stamps ids into the spec and writes a
+  snapshot under `specs/.core/`. The `git add` that follows sweeps both up with
+  the status change; push after it instead and those files are left uncommitted —
+  which strands a dirty worktree on the hand-off, and makes `spec-env integrate`
+  refuse to land the branch.
+
+### Why this is not the refresh `/spec-next` already runs
+
+It was once reasoned that a push here would send the same thing twice, one commit
+apart, because `/spec-next` refreshes the moment it starts. That holds only in
+`checkout` mode, where `/spec-next` follows immediately. In `worktree` mode the
+spec is built elsewhere and the refresh can be hours away or never come — and
+until it does, the issue sits in its old workflow state with nobody assigned
+while the repo reads `in-progress` with a developer on it.
+
+The two pushes are not duplicates either way. This one carries the issue's
+workflow state and its assignee; the one `/spec-next` runs carries phase 1
+starting. Every other lifecycle skill mirrors the state change it makes, and this
+is the seam that stops `/spec-start` being the exception.
 
 - **Commit it.** One commit, the spec's own — it records the in-progress state on
   the branch, and sweeps up everything above so the worktree is clean when you

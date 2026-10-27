@@ -1,2 +1,3 @@
 minimumReleaseAgeExclude:
   - '@skitterbyte/skitterspec@23.0.1'
+  - '@skitterbyte/skitterspec-github@1.2.0'

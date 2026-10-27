@@ -190,7 +190,44 @@ just changed state, so refresh the mirror before the build starts — that is wh
 makes the phase show as in progress *while* it is being built rather than only
 once it is over. Without a provider this is a no-op and nothing below changes.
 
+**Only when `specs/.core/github.config.json` exists** and the spec carries a
+`github_identifier`. Otherwise skip this step — no config means zero change.
 
+- **No pull.** GitHub is a generated mirror in one-way sync, so there is nothing
+  to bring down before building — the repo is already the source of truth. (A
+  workflow-state a teammate moved in GitHub is advisory only; `/spec-status`
+  surfaces it. It is overwritten on the next push.)
+- **Refresh the mirror now, without asking.** Run `/spec-push`. The spec has just
+  moved to `in-progress` and its phase to `🔄` — both real state changes, and the
+  tracker is a generated mirror of them. This holds under **both**
+  `mapping.phases` modes, for different reasons:
+  - `"subissue"` (the default) — the phase sub-issues already exist, and this
+    push is what moves the current one into its in-progress state. Skip it and
+    every sub-issue sits in Backlog until the spec completes.
+  - `"deferred"` — the sub-issues do not exist yet, and this push is what mints
+    them. Skip it and a started spec stays mirrored as a phase-less issue.
+- **Never mint the spec issue.** An unlinked spec is skipped, not created —
+  `/spec-push` is how someone opts in.
+- **Backfill a missing assignee silently; never ask.** Only when the repo owns
+  `assignee` (it does by default; `"none"` declines it). If the spec records nobody and
+  `skitterspec spec-sync whoami --json` answers, stamp it with
+  `skitterspec spec-sync assign <spec> --to <id> --name "<name>"` and let the
+  push above carry it. If identity is unknown, skip it in silence.
+  **Do not prompt**: an assignment question in the middle of a build is an
+  interruption with no deadline, and `/spec-claim` answers it whenever the
+  operator likes.
+- **A spec assigned to someone else is left alone.** Say so once
+  (`assigned to <name> — /spec-claim to take it`) and change nothing. Picking up
+  a colleague's spec is a decision, not a side effect of running the next phase.
+- **Never fatal.** If the push fails — offline, no token, a GitHub error — say so
+  and **carry on with the build**. The repo is correct regardless; the mirror is
+  disposable and the next push repairs it.
+- **Expect a dirty `specs/.core/` afterwards.** The push writes a base snapshot
+  and stamps any new ids, and `/spec-next` does not commit. The next `/commit`
+  sweeps it up with the phase's own work.
+- A board's built-in workflows (item closed → Done, PR merged → Done) may move a
+  Status off the branch/PR you pushed in step 2; that's expected and the repo
+  still wins on the next `/spec-push`.
 
 **Before building, compare the worktree against where you are standing.** Take
 the `worktree:` line from `skitterspec spec-env resolve <spec>` and compare it
@@ -245,7 +282,24 @@ Then build it, following the project rules in `.claude/rules/*.md` and `CLAUDE.m
 in the repo now; leaving the tracker to catch up at `/spec-complete` is what makes
 a mirror lag a whole spec behind. Without a provider this is a no-op.
 
+**Only when `specs/.core/github.config.json` exists** and the spec carries a
+`github_identifier`. Either missing → **skip**, in one line
+(`not linked to GitHub — /spec-push to mirror it`), and carry on.
 
+**Refresh the mirror now, without asking.** Run `/spec-push`. The repo has just
+become the truth about this phase's progress, and progress is what the mirror
+exists to show. Deferring it to `/spec-complete` is what makes every phase
+sub-issue jump from To Do straight to Done, with nothing visible in between.
+
+- **Never mint.** An unlinked spec is skipped, not created.
+- **Never fatal.** If the push fails — offline, no credentials, a GitHub error —
+  say so and **finish the operation anyway**. The phase is done in the repo
+  regardless; the mirror is disposable and the next push repairs it.
+- **Expect a dirty `specs/.core/` afterwards.** The push writes a base snapshot
+  and stamps any new keys, and these skills do not commit. The next `/commit`
+  sweeps it up with the phase's own work.
+- **Say what happened** in the skill's report: mirror updated, skipped as
+  unlinked, or failed with the reason.
 
 ## 4b. Prove nothing leaked into the primary checkout
 

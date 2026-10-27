@@ -17,6 +17,9 @@ description: Finish a spec — verify all phases are genuinely done, update prog
 - Locate the spec folder under `specs/` (usually `specs/in-progress/`). Entry
   point is its `00-overview.md`; phases are separate files (`01-<slug>.md`, `02-…`)
   listed in its phase index (legacy specs may be a bare `<name>.md`).
+- **A hotfix already in `specs/complete/` whose worktree still stands** is a
+  hotfix waiting on its deploy. That run is the teardown only: go straight to
+  step 7's hotfix paragraph, and do not re-verify, re-move or re-land it.
 
 ## 2. Double-check progress — don't rubber-stamp
 
@@ -75,7 +78,51 @@ feature was designed not to disturb.
 move the whole folder). The `specs/complete/` folder is the record of finished
 specs — `git log`/the per-spec State log give the completion order.
 
+**Only when `specs/.core/github.config.json` exists** and the spec's overview
+carries a `github_identifier`. Either missing → **skip**, in one line
+(`not linked to GitHub — /spec-push to mirror it`), and carry on. Nothing else in
+this step changes.
 
+**Refresh the mirror now, without asking.** Run `/spec-push`. The repo has just
+become the truth about this spec's state, and the tracker is a generated mirror
+of it — leaving them to diverge until someone remembers to push by hand is the
+gap this exists to close. It costs one engine call and no model tokens when a
+GitHub token is set (see `apply.transport` in `github.config.md`).
+
+- **Never mint.** An unlinked spec is skipped, not created. An issue born closed
+  is tracker noise, and a spec kept deliberately local should stay
+  that way — `/spec-push` is how someone opts in.
+- **Never fatal.** If the push fails — offline, no token, a GitHub error — say so
+  and **finish the operation anyway**. The spec is complete/cancelled/reviewed in
+  the repo regardless; the mirror is disposable and the next push repairs it.
+  Do not roll anything back, and do not stop to ask.
+- **Say what happened** in the skill's report: mirror updated, skipped as
+  unlinked, or failed with the reason.
+- **There is no unassign step, and that is not an omission.** Where the repo owns
+  `assignee`, the projection derives it from the spec's lifecycle
+  bucket — so moving the folder to `complete`/`cancelled` is *itself* what
+  releases the issue, and the push above carries it like any other field. The
+  `github_assignee_id` stamp and the `> **Developer:**` header both stay put:
+  they record who actioned the work, which outlives who is holding it.
+
+### Why it sits here
+
+In `/spec-complete` and `/spec-cancel` this step is deliberately pinned
+**after the `git mv` and before the commit**, and both halves matter:
+
+- **After the move**, because the projection reads a spec's workflow state from
+  its folder bucket. Push while the folder is still in `in-progress/` and the
+  issue is set to the state the spec is *leaving*.
+- **Before the commit**, because the push stamps ids into the spec and writes a
+  snapshot under `specs/.core/`. Push after the commit instead and both are left
+  uncommitted, which makes `spec-env integrate` refuse to land the branch.
+
+The snapshot is reached **by name**, not by breadth. It is a declared
+`spec.companionPaths` entry (`specs/.core/github-base/{identifier}.base.json`),
+so `spec-env stage` returns it among this spec's owned paths and the commit below
+names it. This is why the commit no longer stages `specs/` wholesale: the one
+file outside the spec's folder that had to be swept up is addressable, so the
+breadth bought nothing and cost another session's work.
 
 Then **commit the completion edits** — steps 3–4 are this skill's own output, so
 it finishes its own work rather than handing you a dirty tree. Ask the engine
@@ -124,8 +171,8 @@ the shape; this section carries only what is specific here.
 **Fields:** `Tracker` · `Spec` · `Tests` · `Notes` · `Landed` · `Worktree` ·
 `Follow-ups` · `Next`
 
-`Notes` carries the after-land commands step 6 ran, and where — or, on a
-failure, the command that failed and the ones that did not run. A project with
+`Notes` carries the after-land commands step 6 ran, and where, and any it
+skipped because the land matched no `when` — or, on a failure, the command that failed and the ones that did not run. A project with
 no `afterLand` says nothing about it.
 
 **Report this spec and no other.** A completion is the moment it is most
@@ -136,8 +183,8 @@ about another spec followed from it. `Next` is one action for this spec, and
 `/spec-list` is where the wider picture lives if they want it.
 
 `Landed` says how, because the two ways differ: a fast-forward names the base
-and the commit, a hotfix names the deploy tag and the `main` cherry-pick — and
-a deploy tag that has not been pushed is a `⚠️`, not a `✅`. `Worktree` says
+and the commit, a hotfix names the release tag, whether it was pushed, and the
+`main` carry — and a release tag that has not been pushed is a `⚠️`, not a `✅`. `Worktree` says
 what was reclaimed, including any orphaned volumes swept, or that teardown was
 declined and the worktree still stands.
 
@@ -152,34 +199,57 @@ commands you run differ but these steps do not)
 before. When it applies, offer to land the finished branch so the work reaches its
 destination in one flow. **How it lands depends on the spec type:**
 
-### 6-hotfix. `Type: Hotfix` — tag + cherry-pick (not fast-forward)
+### 6-hotfix. `Type: Hotfix` — release, push, carry (not fast-forward)
 
 A hotfix is built on an old release **tag**, so it can't fast-forward onto `main`.
-Use the hotfix landing instead of the integrate steps below:
+The engine runs its landing itself — `hotfix land` releases, pushes and carries,
+in that order, and stops at the first step that fails:
 
 1. **Require a clean worktree.** Step 4 already committed the completion edits, so
    this should pass. If the tree is *still* dirty, that's unrelated work — offer
-   `/commit` and **stop**.
-2. **Plan + execute.** Run `skitterspec spec-env hotfix land <name>` — add
-   `--also <tag>` for each extra release line to patch (test/demo on their own
-   versions). Run the printed commands **in order**. It:
-   - tags the hotfix branch with the **patch-bumped base tag** (the deploy tag) —
-     **created locally; you push it** (`git push origin <tag>`) to trigger CI/CD;
-   - for each `--also` target, cherry-picks the fix onto a throwaway worktree at
-     that tag and re-tags it;
-   - cherry-picks the fix onto `main` for the next release.
-   On a **cherry-pick conflict** (non-zero exit), run `git -C <checkout>
-   cherry-pick --abort` there, relay the conflict, and **stop** — don't offer
-   teardown.
-   On a **no-op** ("nothing to land"), say so and continue.
-3. **Run the after-land commands** when the plan ends with a
+   `/commit` and **stop**. The order matters beyond tidiness: a project's
+   `hotfix.releaseWith` (skittership's `release-hotfix.cjs`) refuses a dirty tree
+   and an already-tagged HEAD, so the release has to run **after** the §4 commit.
+2. **Ask before pushing.** Pushing the tag is what starts the prod deploy, so it is
+   the operator's to say yes to — ask once, plainly, naming the tag-to-be and the
+   remote (`skitterspec spec-env hotfix land <name> --plan` says what will run).
+3. **Land it.** On a yes:
+
+   ```
+   skitterspec spec-env hotfix land <name> --push
+   ```
+
+   On a no, run it **without** `--push`. Add `--also <tag>` for each extra release
+   line to patch (test/demo lines — tag-only, never through `releaseWith`).
+   It:
+   - **releases** the branch head — through `hotfix.releaseWith` when the project
+     set one (its version commit and tag; its one JSON line names the tag), else
+     the built-in tagger (`hotfix.bump`: `patch`, or `hotfix-suffix` for
+     `X.Y.Z-hotfix.N`). The release is recorded, so a re-run never cuts a second;
+   - **pushes** the branch, then the tag, to `origin` — only with `--push`. Without
+     it the run **holds** here, exit 0, printing both push commands; a re-run after
+     the operator pushes by hand finds the tag on the remote and carries on;
+   - **carries** the fix onto `main`: the branch's commits minus the version commit
+     and minus anything `main` already has, so the spec's completion commits arrive
+     and `main`'s version line does not move. In place when `main` is checked out
+     and clean, through a throwaway worktree when it is not checked out, and
+     **refused** — with the command to run later — when it is checked out and
+     dirty.
+
+   Relay its step lines. A **non-zero exit** is a refusal or a failure at a named
+   step — a refused release, a failed push, a conflicted carry (already aborted,
+   naming the commit). Relay it and **stop**; whatever was cut is recorded, so the
+   fix is to clear the cause and re-run the same command. On a **no-op** ("nothing
+   to land"), say so and continue.
+4. **Run the after-land commands** when the run ends with a
    `then, in the primary checkout (<path>), run:` section — exactly as step 3
-   of 6-feature/bug below says. `hotfix land` prints it only when it
-   cherry-picks onto `main`, so a prod-only land or a no-op has none.
-4. **Re-test on `main`** after the cherry-pick — it must be **green**.
-5. **Report** the deploy tag(s) and the `main` cherry-pick. It **never pushes** —
-   remind the user to `git push origin <deploy-tag>` to deploy. Then teardown
-   (step 7) applies: a tagged hotfix branch tears down with **no `--force`**.
+   of 6-feature/bug below says. `hotfix land` prints it only when the carry moved
+   `main`, so a held, prod-only or already-carried land has none.
+5. **Re-test on `main`** after the carry — it must be **green**.
+6. **Report** — `Landed` names the release tag and whether it was **pushed**, and
+   what the carry did. A tag cut but not pushed is a `⚠️`, not a `✅`.
+   **Then stop: the worktree is kept** (step 7). The branch is what the next
+   `-hotfix.N` is cut from if this deploy fails, so it waits for the deploy.
 
 ### 6-feature/bug. `Type: Feature` / `Type: Bug` — rebase + fast-forward
 
@@ -219,7 +289,10 @@ is finished — e.g. to run a later phase in CI or a shared test env? Use
 3. **Run the after-land commands.** Where the plan ends with a
    `then, in the primary checkout (<path>), run:` section — the project's
    `afterLand`, such as a data migration — run those commands in that
-   directory, in order, after the fast-forward succeeds. **Also on the no-op**:
+   directory, in order, after the fast-forward succeeds. Run only the lines under that
+   heading; a `skipped (nothing in the land matched):` block lists conditional
+   entries this land did not need, and is information, never commands.
+   **Also on the no-op**:
    the engine prints them there deliberately, because a land made on another
    machine leaves them pending here. **Stop at the first non-zero exit** — a
    later command may depend on it — and carry on with the rest of the skill:
@@ -233,6 +306,21 @@ is finished — e.g. to run a later phase in CI or a shared test env? Use
    mention the user can `git push` the base branch themselves.
 
 ## 7. Tear down the environment (opt-in, only if configured)
+
+**A hotfix is torn down later, by `hotfix finish`.**
+It is never torn down here on the run that landed it. Skip sub-steps 0–3 for a `Type: Hotfix` spec that step 6 just landed,
+and say the worktree is kept until the deploy is confirmed. When the operator runs
+`/spec-complete` **again** on that hotfix — it is already in `specs/complete/` and
+already landed — this step is the whole run: `cd` to the primary checkout, then
+
+```
+skitterspec spec-env hotfix finish <name>
+```
+
+It tears down only when the tree is clean, a release tag is at HEAD and the branch
+is on `origin` at HEAD, naming every check that fails; there is no `--force`.
+Relay a refusal and stop. Report what it removed in `Worktree`.
+
 
 **Only when `specs/.core/env.config.json` exists.** Reclaiming the environment is
 what completing a spec *is*, so sub-steps 1–3 run **automatically — do not ask**.
@@ -311,7 +399,8 @@ only ordering that survives.
 
 3. **Remove worktree + stack + slot:** run `skitterspec spec-env down <name>`
    and execute the commands it prints, in order. After a landing — merged into
-   base for a **feature/bug**, captured by the deploy tag for a **hotfix** —
+   base for a **feature/bug** (a hotfix never reaches this sub-step; see the top
+   of step 7) —
    teardown needs **no `--force`** and drops the branch with `git branch -D`,
    which is safe precisely because the commits are already somewhere else. It
    still respects the guards (won't destroy a dirty, or unpushed-and-unlanded,

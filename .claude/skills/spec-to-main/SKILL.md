@@ -91,7 +91,9 @@ and continue — the branch has no commits base doesn't already have.
 `then, in the primary checkout (<path>), run:` section — the project's
 `afterLand`, such as a data migration — run those commands in that directory,
 in order, after the fast-forward and **before** the re-test below, which may
-need them. Run them on the no-op too: the engine prints them there because a
+need them. Run only the lines under that heading; a
+`skipped (nothing in the land matched):` block lists conditional entries this
+land did not need, and is information, never commands. Run them on the no-op too: the engine prints them there because a
 land made elsewhere leaves them pending here.
 **Stop at the first non-zero exit**, and carry on with §5: a failure makes the run `⚠️`, naming the command
 that failed and the ones that did not run, and it **never undoes the land**.
@@ -129,8 +131,8 @@ the shape; this section carries only what is specific here.
 
 **Fields:** `Branch` · `Tests` · `Notes` · `Landed` · `Follow-ups` · `Next`
 
-`Notes` carries the after-land commands §4 ran, and where — or the one that
-failed and the ones that did not run. Nothing about it when none are
+`Notes` carries the after-land commands §4 ran, and where, and any it
+skipped because the land matched no `when` — or the one that failed and the ones that did not run. Nothing about it when none are
 configured.
 
 **No `Spec` field, deliberately.** This skill changes no status and moves no
