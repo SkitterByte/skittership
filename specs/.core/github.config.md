@@ -51,6 +51,75 @@ deployed.
 | `apply.transport` | — | `api` or `mcp`; unset = API when a token resolves. |
 | `sync.baseDir` | `specs/.core/github-base` | Last-pushed snapshots. Commit them. |
 | `sync.fieldOwnership` | all `push` | Per-field ownership; `"none"` declines one (e.g. `assignee`). |
+| `releases.deployedField` | `Deployed` | The second single-select the release verbs set. |
+| `releases.series` | `[]` | One entry per tag series: `{ tagPrefix, envs, npm }` — see below. |
+
+## Releases — the mirror of what shipped
+
+The `spec-sync release` verbs write a release onto GitHub and move its issues'
+`Deployed` field: `create <tag> --stage <env>` mints a prerelease listing the
+tickets the tag's range contains, `deployed <tag> <env>` sets the field on
+every one of them, `complete <tag>` clears the prerelease flag. Every verb is a
+dry run unless `--apply`. A series declares its envs in order:
+
+```json
+"releases": {
+  "series": [
+    { "tagPrefix": "myapp@",
+      "envs": { "staged": "Staged", "published": "Published" },
+      "npm": "@scope/myapp" }
+  ]
+}
+```
+
+**`reconcile` is the self-healing verb**, for the approvals that happen where
+no verb runs — the npm website, a batched tag push that fired no workflow. It
+asks the npm registry which versions of `npm` are live and repairs the mirror:
+
+- A marked release whose version is live — **or contained in a newer live
+  version of its series**, since that version carries its commits — moves to
+  the series' **final** env and is completed. Ascending, and only the newest
+  takes GitHub's "Latest".
+- A pushed tag with **no release at all** is backfilled at the first env, then
+  probed like the rest — bounded to tags newer than the series' newest
+  release (the newest tag alone where the series has none), so old history is
+  never flooded onto the releases page.
+- **Absence is never failure**: a version the registry lacks is "not yet" and
+  the release is kept; an unreachable registry, a 404 package, or a series
+  with no `npm` key skips that series in one line and exits 0. Only a release
+  listing that could not be read refuses.
+- Only releases carrying the skitterspec marker are touched — a hand-made
+  release is never read or written.
+
+Run it hourly from a scheduled workflow (plus `workflow_dispatch` for an
+instant run after an approval). The checkout needs `fetch-depth: 0` — tag
+ranges are refused on a shallow clone — and the token must be a classic PAT
+(`repo` + `project`) in a secret: the Actions `GITHUB_TOKEN` cannot write a
+user-owned Projects board.
+
+```yaml
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # …install your toolchain…
+      - env:
+          GITHUB_TOKEN: ${{ secrets.YOUR_PAT_SECRET }}
+        run: |
+          if [ -z "$GITHUB_TOKEN" ]; then
+            echo "::notice::no PAT secret — reconcile skipped"; exit 0
+          fi
+          skitterspec-github spec-sync release reconcile --apply
+```
 
 ## The token
 

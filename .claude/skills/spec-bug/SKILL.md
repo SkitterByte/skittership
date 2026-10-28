@@ -590,7 +590,9 @@ underneath a reader when detection flipped mid-session.
 
 So: **relay all three tier lines, every time.** Any `also:` lines sit under
 `network` — the other addresses this machine has, offered because the
-best-guess one can be wrong — so pass them on rather than editing them out.
+best-guess one can be wrong — so pass them on rather than editing them out: in
+the banner they are indented sub-bullets under **network**, labels
+(`(tailnet)`) included, exactly as `.claude/rules/spec-reports.md` shows.
 
 **Never read an environment variable to decide anything about the offer** — not
 `SSH_CONNECTION`, not `CLAUDE_CODE_*`, not a tty check. There is nothing left

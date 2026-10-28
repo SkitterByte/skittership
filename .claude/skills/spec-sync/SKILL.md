@@ -193,6 +193,31 @@ A commit whose changed paths are **all** under `release.ignorePaths` (default
 file still counts. Relay the **ignored count** whenever it is non-zero — that is
 the report saying which commits it set aside.
 
+## 7b. `release` — mirror what shipped onto GitHub Releases and the board
+
+```
+pnpm exec skitterspec-github spec-sync release create <tag> --stage <env> [--apply]
+pnpm exec skitterspec-github spec-sync release deployed <tag> <env> [--apply]
+pnpm exec skitterspec-github spec-sync release complete <tag> [--apply]
+pnpm exec skitterspec-github spec-sync release reconcile [--apply] [--json]
+```
+
+These need `releases.series` in the config — `github.config.md` → "Releases"
+carries the field reference and semantics. Every verb is a **dry run without
+`--apply`**, so relay the plan rather than re-deriving it. `create` mints a
+prerelease listing the tag's tickets, `deployed` sets the board's Deployed
+option on them, `complete` clears the prerelease flag. They are CI's verbs
+first — run by the host project's pipeline on a tag — and re-run by hand to
+repair the mirror.
+
+`reconcile` is the self-healing one: it probes the npm registry for each
+series' live versions and moves every marked release that shipped — including
+one superseded by a newer live version — to the series' final env, backfilling
+a release for a pushed tag that never got one. It is schedule-friendly: a
+version the registry lacks is "not yet" and exits 0, so relay its per-release
+lines verbatim and never read a `kept` as a failure. It refuses over MCP and on
+a shallow clone, exactly as `create` does.
+
 ## 8. Report
 
 Relay the engine's output **above the block**, and name the subcommand you ran

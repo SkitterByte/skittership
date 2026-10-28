@@ -36,7 +36,7 @@ A verdict sentence, a blank line, then a two-column table:
 | **Branch** | `spec/feat-foo` · 3 commits, clean |
 | **Built** | POST /orders handler, orders schema |
 | **Tests** | 128 passed · dotnet test |
-| **Review** | 7 files, +212 −18 · **local** [http://127.0.0.1:7760/…](http://127.0.0.1:7760/…) · **network** [http://192.168.0.136:7760/…](http://192.168.0.136:7760/…) · **remote** off |
+| **Review** | 7 files, +212 −18 · **local** [http://127.0.0.1:7760/…](http://127.0.0.1:7760/…) · **network** [http://192.168.0.136:7760/…](http://192.168.0.136:7760/…) also [http://100.126.111.34:7760/…](http://100.126.111.34:7760/…) (tailnet) · **remote** off |
 | **Follow-ups** | none |
 | **Next** | `/spec-next` → phase 3 (Auth) |
 
@@ -89,6 +89,7 @@ the options may be offered after the table.
 
 - **local** — [http://127.0.0.1:7760/7e9e123e7540/feat-orders](http://127.0.0.1:7760/7e9e123e7540/feat-orders)
 - **network** — [http://192.168.0.136:7760/7e9e123e7540/feat-orders](http://192.168.0.136:7760/7e9e123e7540/feat-orders)
+  - also — [http://100.126.111.34:7760/7e9e123e7540/feat-orders](http://100.126.111.34:7760/7e9e123e7540/feat-orders) (tailnet)
 - **remote** — off · `/spec-remote-review` turns it on
 
 live: off — /spec-live to put it live
@@ -155,6 +156,17 @@ A tier that is off **keeps its line** and names the one command that turns it
 on. Dropping the line is what left a reader who had walked out of the house with
 nothing on screen to tell them a remote page was even possible — they could not
 ask for what they could not see.
+
+**The `network` tier may carry alternates, and they are part of it — not a fourth tier.**
+The engine offers the other addresses this machine has (a
+tailnet one, for a reader off the wifi) as `also:` lines under `network`, each
+labelled; `--json` carries them as that tier's `alternates`, labelled the same
+way. Copy them as indented sub-bullets under the network bullet, verbatim,
+labels included. This is not an amendment to the tier rule: the stack is the
+engine's, copied rather than composed, and the engine was already printing
+these — a contract that made the skill edit them out was the composing this
+section forbids. A machine with no alternates renders the banner exactly as
+above, minus the sub-bullet.
 
 **Only promise a wait the transport can deliver.** The wait itself is real in
 every case; what varies is what carries it back, not whether the run is
@@ -298,8 +310,11 @@ behind, and they cannot.
 `fetch(location.pathname, …)`, so a page opened at `127.0.0.1:7760/…` and one
 opened at `192.168.0.136:7760/…` reach the same server process and the same
 pending store. One wait covers both, and a verdict pressed on either wakes the
-same run. Between those two the objection does not apply — which is why both are
-offered, and why offering them gives nothing up.
+same run. A `network` alternate — the `also:` tailnet address — is one more
+door into the same room: the same server answers on it, so the wait-coverage
+line stays true with nothing added to it. Between all of those the objection
+does not apply — which is why they are offered, and why offering them gives
+nothing up.
 
 **So two things are required, and the second is what the old rule lacked.**
 Every link is **labelled** with its tier, and one line says
@@ -410,7 +425,7 @@ behind it — say nothing rather than reporting that there was nothing to report
 | `Landed` | A fast-forward, a tag, a cherry-pick. |
 | `Worktree` | A worktree provisioned, entered, or torn down. |
 | `Untouched` | Uncommitted work the run deliberately left alone — whose, and how much. |
-| `Review` | The rendered diff page: files, `+`/`−`, and the stack — the same tiers the banner lists, labelled, run together with `·` because a row is one cell, plus `live` where the engine reported one. **No question** — a row cannot be waited on, so a question in one is unanswerable by construction (see *asking implies waiting*). **Omitted entirely when the run is waiting on a verdict**: the banner after the block carries it instead, and a row saying the same thing beside it splits the reader's attention across two places. |
+| `Review` | The rendered diff page: files, `+`/`−`, and the stack — the same tiers the banner lists, labelled, run together with `·` because a row is one cell, with any `network` alternates inline after the network URL (`also <url> (tailnet)`), plus `live` where the engine reported one. **No question** — a row cannot be waited on, so a question in one is unanswerable by construction (see *asking implies waiting*). **Omitted entirely when the run is waiting on a verdict**: the banner after the block carries it instead, and a row saying the same thing beside it splits the reader's attention across two places. |
 | `Follow-ups` | **Always.** `none`, or one line each. |
 | `Next` | **Last.** The single next action for this work — runnable from the state the run leaves behind. |
 

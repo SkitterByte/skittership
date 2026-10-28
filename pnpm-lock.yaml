@@ -171,13 +171,13 @@ importers:
         version: 2.4.2
     devDependencies:
       '@skitterbyte/skitterspec-github':
-        specifier: ^1.2.0
-        version: 1.2.0
+        specifier: ^1.3.0
+        version: 1.3.0
 
 packages:
 
-  '@skitterbyte/skitterspec-github@1.2.0':
-    resolution: {integrity: sha512-gbPszfvwEyRH8LqSBZav8jKkt/4COtz1qIMvMVrapiHmXhhdqjkryc3j2XThGVovzyihDjlKJjRQ4InlgSDlIQ==}
+  '@skitterbyte/skitterspec-github@1.3.0':
+    resolution: {integrity: sha512-PzLorZR+OHGd2z52U5tCOzqp8rXX/N1Y8bOr9HnKxH7b0Ky5a11UFnKW0G6XDs2DDNlUGQjPf5s4/SpEsLs8pg==}
     engines: {node: '>=22.13'}
     hasBin: true
 
@@ -194,7 +194,7 @@ packages:
 
 snapshots:
 
-  '@skitterbyte/skitterspec-github@1.2.0':
+  '@skitterbyte/skitterspec-github@1.3.0':
     dependencies:
       prompts: 2.4.2
 
