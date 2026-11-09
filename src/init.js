@@ -37,6 +37,9 @@ const INDEX_GUARD_SCRIPT = path.join('scripts', 'check-release-index.cjs')
 // Cuts a `-hotfix.N` version through the same `npm version` hook. Installed
 // whenever either generator is, since it exists to drive them.
 const HOTFIX_SCRIPT = path.join('scripts', 'release-hotfix.cjs')
+// Resolves a version to an npm stage-id and approves it. Installed only when
+// `release.staged` is true: staged publishing is a choice, not a default.
+const APPROVE_SCRIPT = path.join('scripts', 'approve-release.cjs')
 
 // Pre-1.1 the same generators shipped as .js. On a re-install we overwrite the
 // managed .cjs copies but must also delete these stale .js siblings, or the old
@@ -231,6 +234,7 @@ function releaseFromConfig(cfg) {
     versionHook: cfg.versionHook,
     hotfix: cfg.hotfix,
     packages: cfg.packages,
+    release: cfg.release,
   }
 }
 
@@ -250,6 +254,7 @@ function serializeConfig(release) {
   // Written back exactly as the user wrote it — the loader validates it but
   // fills no defaults in, so a rewrite never expands a terse entry.
   if (release.packages) config.packages = release.packages
+  if (release.release) config.release = release.release
   return JSON.stringify(config, null, 2) + '\n'
 }
 
@@ -293,6 +298,47 @@ function installScripts(dir, release, opts) {
   }
   copyAsset(dir, INDEX_GUARD_SCRIPT, path.join(dir, INDEX_GUARD_SCRIPT), managed)
   copyAsset(dir, HOTFIX_SCRIPT, path.join(dir, HOTFIX_SCRIPT), managed)
+  if (stagedPublishing(release)) copyAsset(dir, APPROVE_SCRIPT, path.join(dir, APPROVE_SCRIPT), managed)
+}
+
+// The approver needs the shared lib, which installScripts writes only when a
+// generator is enabled — so it follows the same condition.
+const stagedPublishing = (release) =>
+  Boolean(release.release && release.release.staged) &&
+  (release.changelog.enabled || release.releases.enabled)
+
+/**
+ * The npm helpers for the release scripts, wired whether or not the version
+ * hook is: a monorepo root that refuses `npm version` still approves its
+ * packages' releases. Only what the config opted into, and — like every
+ * helper — a differing script of the user's is kept unless --force.
+ */
+function wireReleaseHelpers(dir, release, { force }) {
+  const helpers = {}
+  if (stagedPublishing(release)) {
+    helpers.approve = 'node scripts/approve-release.cjs'
+    helpers.staged = 'npm stage list'
+  }
+  if (Object.keys(helpers).length === 0) return
+
+  const pkgPath = path.join(dir, 'package.json')
+  let pkg
+  try {
+    pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+  } catch {
+    report.warnings.push('package.json is missing or not valid JSON — skipped release helper scripts')
+    return
+  }
+  const before = JSON.stringify(pkg)
+  pkg.scripts = pkg.scripts || {}
+  for (const [name, cmd] of Object.entries(helpers)) {
+    if (pkg.scripts[name] && pkg.scripts[name] !== cmd && !force) continue
+    pkg.scripts[name] = cmd
+  }
+  if (JSON.stringify(pkg) !== before) {
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+    report.updated.push('package.json (release scripts)')
+  }
 }
 
 // Delete pre-1.1 .js generator copies superseded by the .cjs ones.
@@ -548,6 +594,7 @@ async function init({ dir, force, claudeMd, mode, release }) {
   // names the now-deleted .js files). In `init` this keeps a custom `version`
   // script unless --force; `update` always passes force.
   if (rel.versionHook) wireVersionHook(dir, rel, { force })
+  wireReleaseHelpers(dir, rel, { force })
 
   // Stamp provenance last, so it describes a completed run rather than a
   // partial one that threw halfway through.

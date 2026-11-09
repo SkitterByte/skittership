@@ -19,7 +19,9 @@
  *     "hotfix":    { "branchPrefix": "hotfix/" },
  *     "packages":  { "<name>": { "tagPrefix": "<name>@", "paths": ["packages/x/**"],
  *                                "releasesFile": "RELEASES-<name>.md",
- *                                "productName": "<name>", "dir": "packages/x" } }
+ *                                "productName": "<name>", "dir": "packages/x",
+ *                                "npm": "@scope/x" } },
+ *     "release":   { "staged": true }
  *   }
  *
  * `releases.emptyRelease` is what a release with no user-facing notes says in
@@ -35,6 +37,9 @@
  * optional. It is validated here but kept exactly as written (`null` when
  * absent), so `init`/`update` write it back unchanged; `resolvePackage` fills
  * in the defaults at the point of use.
+ *
+ * `release` is opt-in too, and kept as written: its presence installs the
+ * release scripts, and `release.staged` the npm staged-publish approver.
  */
 
 const { readFileSync } = require('node:fs')
@@ -79,13 +84,14 @@ function defaultsFor(dir) {
     versionHook: true,
     hotfix: { branchPrefix: 'hotfix/' },
     packages: null,
+    release: null,
   }
 }
 
 // A package name ends up in a default tag prefix and a default filename, so it
 // is held to the same character set as a prefix.
 const PACKAGE_NAME = /^[A-Za-z0-9._-]+$/
-const PACKAGE_STRING_FIELDS = ['tagPrefix', 'releasesFile', 'productName', 'dir']
+const PACKAGE_STRING_FIELDS = ['tagPrefix', 'releasesFile', 'productName', 'dir', 'npm']
 
 function packagesError(message) {
   return new Error(`Invalid ${CONFIG_FILE}: packages${message}`)
@@ -144,7 +150,25 @@ function resolvePackage(config, name) {
     releasesFile: entry.releasesFile || `RELEASES-${name}.md`,
     productName: entry.productName || name,
     dir: entry.dir || null,
+    npm: entry.npm || null,
   }
+}
+
+function releaseError(message) {
+  return new Error(`Invalid ${CONFIG_FILE}: release${message}`)
+}
+
+/**
+ * Check `release` and return it as written, like `packages`. Its presence is
+ * the opt-in to the release scripts, so a malformed value refuses rather than
+ * being read as absent.
+ */
+function validateRelease(release) {
+  if (!isObject(release)) throw releaseError(' must be an object')
+  if (release.staged !== undefined && typeof release.staged !== 'boolean') {
+    throw releaseError('.staged must be true or false')
+  }
+  return release
 }
 
 /**
@@ -193,6 +217,7 @@ function mergeConfig(base, parsed) {
 
   // `null` reads as absent, like leaving the key out.
   if (parsed.packages != null) base.packages = validatePackages(parsed.packages)
+  if (parsed.release != null) base.release = validateRelease(parsed.release)
 
   if (isObject(parsed.hotfix)) {
     if (typeof parsed.hotfix.branchPrefix === 'string' && parsed.hotfix.branchPrefix.trim()) {

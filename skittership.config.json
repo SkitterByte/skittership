@@ -16,5 +16,8 @@
       "releases": "Release tooling"
     }
   },
-  "versionHook": true
+  "versionHook": true,
+  "release": {
+    "staged": true
+  }
 }

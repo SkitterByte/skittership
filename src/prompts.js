@@ -79,6 +79,7 @@ async function promptSetup({ seed, pkgExists }) {
       versionHook: pkgExists ? Boolean(ans.versionHook) : seed.versionHook,
       hotfix: seed.hotfix,
       packages: seed.packages,
+      release: seed.release,
     },
   }
 }

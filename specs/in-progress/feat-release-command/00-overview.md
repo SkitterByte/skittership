@@ -108,7 +108,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 
 | # | Phase | Status | File |
 |---|-------|--------|------|
-| 1 | Ship a generalised approve-release, opt-in | ⬜ | [01-approve.md](01-approve.md) |
+| 1 | Ship a generalised approve-release, opt-in | ✅ | [01-approve.md](01-approve.md) |
 | 2 | `release.cjs`: plan, `--yes`, `--push`, hooks | ⬜ | [02-release.md](02-release.md) |
 | 3 | Recorded-hash ancestry check and docs | ⬜ | [03-hash-check-and-docs.md](03-hash-check-and-docs.md) |
 
@@ -131,3 +131,11 @@ does not, and can start first.
 - 2026-11-09 — Spec created, split from the same brief as
   feat-release-packages. Chose shipped scripts over a `skittership release`
   CLI, and preTag hooks over built-in Linux/"nothing shipped" steps.
+- 2026-11-09 — Phase 1: the approver's first argument is a package only when
+  it names a configured one, so single-package calls parse as before. The
+  `approve`/`staged` helpers are wired independently of `versionHook`
+  (skitterspec's root has it off), and only when a generator is enabled,
+  since the approver needs the shared lib. `release` is validated and kept
+  as written, like `packages`; `packages.<name>.npm` joined the entry fields.
+  Dogfood: this repo set `release.staged` and `update` adopted the managed
+  copy (manifest refreshed, which also records the generators' new hashes).

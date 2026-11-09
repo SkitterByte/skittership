@@ -2,30 +2,37 @@
 'use strict'
 
 /**
- * Approve (or reject) the staged release for this package.
+ * Approve (or reject) a staged npm release.
  *
  * CI stages a build with `npm stage publish` but cannot make it live — the
  * trusted publisher is stage-only, so a maintainer has to approve it with 2FA.
  * That gate is the point; this script only shortens the typing around it.
  *
- *   npm run approve              approve the version in package.json
- *   npm run approve 2.0.1        approve a specific version
- *   npm run approve <uuid>       approve a specific stage-id directly
- *   npm run approve -- --reject  reject instead of approving
+ *   npm run approve                  approve the version in package.json
+ *   npm run approve 2.0.1            approve a specific version
+ *   npm run approve <uuid>           approve a specific stage-id directly
+ *   npm run approve api              a monorepo package (`packages.api`)
+ *   npm run approve api 2.0.1        …at a specific version
+ *   npm run approve -- --reject      reject instead of approving
  *
  * `npm stage approve|reject|view|download` all take a STAGE-ID (a UUID), not a
  * package spec — only `npm stage list` accepts a spec. So the version you pass
  * has to be resolved to an id via the listing first, which is the bulk of the
  * work here.
  *
- * REPO-LOCAL. Unlike its siblings in this directory, this file is not mirrored
- * from assets/ and is not shipped to consumers — staged publishing is how THIS
- * package releases, not something skittership installs.
+ * In a monorepo the first argument may name a package from
+ * `skittership.config.json` → `packages`. Its npm name is `packages.<name>.npm`,
+ * else the `name` in `<dir>/package.json`; its version, when none is passed,
+ * is that package.json's. Installed only when `release.staged` is true.
  */
 
 const { execFileSync } = require('node:child_process')
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
+
+const { loadConfig, resolvePackage } = require('./lib/config.cjs')
+
+const ROOT = join(__dirname, '..')
 
 // `npm stage` landed in 11.15.0; older npm fails with an opaque "unknown
 // command", which reads as a broken script rather than a stale toolchain.
@@ -33,11 +40,41 @@ const MIN_NPM = [11, 15, 0]
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-function readPackage() {
-  const raw = readFileSync(join(__dirname, '..', 'package.json'), 'utf8')
-  const { name, version } = JSON.parse(raw)
-  if (!name || !version) throw new Error('package.json is missing name or version')
-  return { name, version }
+function readManifest(dir) {
+  try {
+    return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+class Refusal extends Error {}
+
+/**
+ * The npm name and current version to approve: the root package, or the named
+ * monorepo package. Throws a Refusal naming what is missing.
+ */
+function resolveTarget(root, config, packageName) {
+  if (!packageName) {
+    const pkg = readManifest(root)
+    if (pkg && pkg.name && pkg.version) return { name: pkg.name, version: pkg.version }
+    const known = Object.keys(config.packages || {})
+    throw new Refusal(
+      known.length
+        ? `the root package.json has no name/version to approve — name a package: ${known.join(', ')}`
+        : 'package.json is missing name or version',
+    )
+  }
+  const entry = resolvePackage(config, packageName)
+  const pkg = entry && entry.dir ? readManifest(join(root, entry.dir)) : null
+  const name = entry.npm || (pkg && pkg.name)
+  if (!name) {
+    throw new Refusal(
+      `no npm name for ${packageName} — set packages.${packageName}.npm, ` +
+        `or packages.${packageName}.dir to a folder with a package.json`,
+    )
+  }
+  return { name, version: (pkg && pkg.version) || null }
 }
 
 function npmVersion() {
@@ -53,11 +90,18 @@ function tooOld(actual, min) {
   return false
 }
 
-function parseArgs(argv) {
+/**
+ * `[<package>] [<version>|<stage-id>] [--reject]`. The first positional is a
+ * package only when it is one of `packageNames`, so a single-package project
+ * reads exactly as before.
+ */
+function parseArgs(argv, packageNames = []) {
   const args = argv.slice(2)
   const action = args.includes('--reject') ? 'reject' : 'approve'
-  const target = args.find((a) => !a.startsWith('-'))
-  return { action, target }
+  const positional = args.filter((a) => !a.startsWith('-'))
+  const pkg = positional.length > 0 && packageNames.includes(positional[0]) ? positional[0] : null
+  const target = pkg ? positional[1] : positional[0]
+  return { action, package: pkg, target }
 }
 
 /**
@@ -126,8 +170,20 @@ function listStaged(name) {
 }
 
 function main(argv) {
-  const { name, version: current } = readPackage()
-  const { action, target } = parseArgs(argv)
+  let config
+  let name
+  let current
+  let action
+  let target
+  try {
+    config = loadConfig(ROOT)
+    const args = parseArgs(argv, Object.keys(config.packages || {}))
+    ;({ action, target } = args)
+    ;({ name, version: current } = resolveTarget(ROOT, config, args.package))
+  } catch (error) {
+    console.error(`\n✖ ${error.message}\n`)
+    process.exit(1)
+  }
 
   const npm = npmVersion()
   if (tooOld(npm, MIN_NPM)) {
@@ -141,6 +197,10 @@ function main(argv) {
   // A stage-id can be passed straight through; anything else is a version.
   let stageId = target && UUID.test(target) ? target : null
   const version = stageId ? null : target || current
+  if (!stageId && !version) {
+    console.error(`\n✖ No version for ${name} — pass one, or the stage-id.\n`)
+    process.exit(1)
+  }
 
   if (!stageId) {
     let staged
@@ -227,4 +287,12 @@ function main(argv) {
 
 if (require.main === module) main(process.argv)
 
-module.exports = { parseArgs, tooOld, normaliseEntries, notReadyReason, NOT_READY, UUID }
+module.exports = {
+  parseArgs,
+  resolveTarget,
+  tooOld,
+  normaliseEntries,
+  notReadyReason,
+  NOT_READY,
+  UUID,
+}

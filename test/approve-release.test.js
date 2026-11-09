@@ -6,31 +6,39 @@
 
 const { test } = require('node:test')
 const assert = require('node:assert')
+const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 
-const { parseArgs, tooOld, normaliseEntries, notReadyReason, UUID } = require(
-  path.join(__dirname, '..', 'scripts', 'approve-release.cjs'),
+const { parseArgs, resolveTarget, tooOld, normaliseEntries, notReadyReason, UUID } = require(
+  path.join(__dirname, '..', 'assets', 'scripts', 'approve-release.cjs'),
 )
 
 const argv = (...args) => ['node', 'approve-release.cjs', ...args]
 
 test('defaults to approving, with no version (caller falls back to package.json)', () => {
-  assert.deepStrictEqual(parseArgs(argv()), { action: 'approve', target: undefined })
+  assert.deepStrictEqual(parseArgs(argv()), { action: 'approve', package: null, target: undefined })
 })
 
 test('takes a positional target', () => {
-  assert.deepStrictEqual(parseArgs(argv('2.0.1')), { action: 'approve', target: '2.0.1' })
+  assert.deepStrictEqual(parseArgs(argv('2.0.1')), { action: 'approve', package: null, target: '2.0.1' })
 })
 
 test('--reject switches the action and still takes a version', () => {
-  assert.deepStrictEqual(parseArgs(argv('--reject')), { action: 'reject', target: undefined })
+  assert.deepStrictEqual(parseArgs(argv('--reject')), {
+    action: 'reject',
+    package: null,
+    target: undefined,
+  })
   assert.deepStrictEqual(parseArgs(argv('--reject', '2.0.1')), {
     action: 'reject',
+    package: null,
     target: '2.0.1',
   })
   // Order must not matter — npm run approve 2.0.1 --reject
   assert.deepStrictEqual(parseArgs(argv('2.0.1', '--reject')), {
     action: 'reject',
+    package: null,
     target: '2.0.1',
   })
 })
@@ -151,4 +159,81 @@ test('an unknown or absent status does not block the attempt', () => {
   assert.strictEqual(notReadyReason({ status: 'ready' }), null)
   assert.strictEqual(notReadyReason({}), null)
   assert.strictEqual(notReadyReason(null), null)
+})
+
+// --- monorepo packages ------------------------------------------------------
+
+test('a configured package name is taken as the package, then the target', () => {
+  assert.deepStrictEqual(parseArgs(argv('api', '1.2.0'), ['api', 'web']), {
+    action: 'approve',
+    package: 'api',
+    target: '1.2.0',
+  })
+  assert.deepStrictEqual(parseArgs(argv('--reject', 'web'), ['api', 'web']), {
+    action: 'reject',
+    package: 'web',
+    target: undefined,
+  })
+})
+
+test('a positional that is not a configured package is the target, as before', () => {
+  assert.deepStrictEqual(parseArgs(argv('1.2.0'), ['api']), {
+    action: 'approve',
+    package: null,
+    target: '1.2.0',
+  })
+})
+
+function project({ root, packages }) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'skittership-approve-'))
+  if (root) fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify(root))
+  for (const [rel, manifest] of Object.entries(packages || {})) {
+    fs.mkdirSync(path.join(dir, rel), { recursive: true })
+    fs.writeFileSync(path.join(dir, rel, 'package.json'), JSON.stringify(manifest))
+  }
+  return dir
+}
+
+test('resolveTarget: the root package when none is named', () => {
+  const dir = project({ root: { name: '@x/root', version: '2.0.0' } })
+  assert.deepStrictEqual(resolveTarget(dir, { packages: null }, null), {
+    name: '@x/root',
+    version: '2.0.0',
+  })
+})
+
+test('resolveTarget: a package reads its npm name and version from its dir', () => {
+  const dir = project({ packages: { 'packages/api': { name: '@x/api', version: '1.4.0' } } })
+  const config = { packages: { api: { dir: 'packages/api' } } }
+  assert.deepStrictEqual(resolveTarget(dir, config, 'api'), { name: '@x/api', version: '1.4.0' })
+})
+
+test('resolveTarget: packages.<name>.npm wins over the dir’s name', () => {
+  const dir = project({ packages: { 'packages/api': { name: 'ignored', version: '1.4.0' } } })
+  const config = { packages: { api: { dir: 'packages/api', npm: '@x/api' } } }
+  assert.deepStrictEqual(resolveTarget(dir, config, 'api'), { name: '@x/api', version: '1.4.0' })
+})
+
+test('resolveTarget: npm set but no dir means no current version — the caller asks for one', () => {
+  const dir = project({})
+  assert.deepStrictEqual(resolveTarget(dir, { packages: { api: { npm: '@x/api' } } }, 'api'), {
+    name: '@x/api',
+    version: null,
+  })
+})
+
+test('resolveTarget: no npm name anywhere refuses, naming both fixes', () => {
+  const dir = project({})
+  assert.throws(
+    () => resolveTarget(dir, { packages: { api: {} } }, 'api'),
+    /set packages\.api\.npm, or packages\.api\.dir/,
+  )
+})
+
+test('resolveTarget: a versionless monorepo root asks for a package by name', () => {
+  const dir = project({ root: { name: 'mono', private: true } })
+  assert.throws(
+    () => resolveTarget(dir, { packages: { api: {}, web: {} } }, null),
+    /name a package: api, web/,
+  )
 })

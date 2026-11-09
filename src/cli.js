@@ -94,6 +94,7 @@ function resolveRelease(existing, opts) {
     // No flag sets these; carried so init's config rewrite does not drop them.
     hotfix: existing.hotfix,
     packages: existing.packages,
+    release: existing.release,
   }
 }
 
