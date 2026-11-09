@@ -21,7 +21,9 @@
  *                                "releasesFile": "RELEASES-<name>.md",
  *                                "productName": "<name>", "dir": "packages/x",
  *                                "npm": "@scope/x" } },
- *     "release":   { "staged": true, "test": "pnpm test", "preTag": ["<command>"] }
+ *     "release":   { "staged": true, "test": "pnpm test", "preTag": ["<command>"],
+ *                    "recordedHashes": [{ "files": ["docs/*.html"],
+ *                                         "pattern": "^verified: ([0-9a-f]{7,40})" }] }
  *   }
  *
  * `releases.emptyRelease` is what a release with no user-facing notes says in
@@ -176,6 +178,31 @@ function validateRelease(release) {
     (!Array.isArray(release.preTag) || release.preTag.some((c) => typeof c !== 'string' || !c.trim()))
   ) {
     throw releaseError('.preTag must be an array of command strings')
+  }
+  if (release.recordedHashes !== undefined) {
+    if (!Array.isArray(release.recordedHashes)) {
+      throw releaseError('.recordedHashes must be an array of { files, pattern }')
+    }
+    release.recordedHashes.forEach((source, i) => {
+      const at = `.recordedHashes[${i}]`
+      if (!isObject(source)) throw releaseError(`${at} must be { files, pattern }`)
+      if (
+        !Array.isArray(source.files) ||
+        source.files.length === 0 ||
+        source.files.some((f) => typeof f !== 'string' || !f.trim())
+      ) {
+        throw releaseError(`${at}.files must be a non-empty array of path globs`)
+      }
+      let re
+      try {
+        re = new RegExp(source.pattern)
+      } catch (error) {
+        throw releaseError(`${at}.pattern is not a valid regular expression: ${error.message}`)
+      }
+      if (typeof source.pattern !== 'string' || new RegExp(`${re.source}|`).exec('').length < 2) {
+        throw releaseError(`${at}.pattern must capture the hash in group 1`)
+      }
+    })
   }
   return release
 }

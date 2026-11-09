@@ -110,7 +110,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 |---|-------|--------|------|
 | 1 | Ship a generalised approve-release, opt-in | ✅ | [01-approve.md](01-approve.md) |
 | 2 | `release.cjs`: plan, `--yes`, `--push`, hooks | ✅ | [02-release.md](02-release.md) |
-| 3 | Recorded-hash ancestry check and docs | ⬜ | [03-hash-check-and-docs.md](03-hash-check-and-docs.md) |
+| 3 | Recorded-hash ancestry check and docs | ✅ | [03-hash-check-and-docs.md](03-hash-check-and-docs.md) |
 
 Depends on feat-release-packages (the `packages` map and `--package`). Phase 1
 does not, and can start first.
@@ -148,3 +148,9 @@ does not, and can start first.
   will make `--yes` refuse. Dogfood: this repo's `release` key added a
   `release` helper to its package.json; its own releases still go through
   `pnpm version`, which the plan reflects.
+- 2026-11-09 — Phase 3: the check reads tracked files only, line by line, and
+  runs in `--yes` after the commit (package mode) or before `<pm> version`
+  (root), against HEAD. `check-hashes` with nothing configured says so in one
+  line (only the release path stays fully silent), and a `<ref>` that is not a
+  commit is reported as `cannot tell`, exit 0. `recordedHashes` patterns are
+  validated to compile and to have a capture group.

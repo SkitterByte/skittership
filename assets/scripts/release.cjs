@@ -6,6 +6,7 @@
  *
  *   node scripts/release.cjs [<package>] <patch|minor|major|x.y.z> [--yes] [--push]
  *                            [--skip-tests] [--skip-hooks] [--allow-postversion] [--json]
+ *   node scripts/release.cjs check-hashes [<ref>]
  *
  * Escalating levels — a bare run changes nothing:
  *   (no flag)  plan   print the ordered steps; touch nothing.
@@ -29,6 +30,11 @@
  * RELEASE_BASE_TAG in their environment, and a non-zero exit stops the
  * release. `release.test` replaces `<pm> test`.
  *
+ * `release.recordedHashes` names files that record commit hashes (a docs page's
+ * `verified: <sha>`). Right before tagging, a recorded hash that is not in the
+ * history being tagged is WARNED about — a rebase rewrites hashes and leaves
+ * those records pointing at nothing. It never stops a release.
+ *
  * --json prints {package, version, tag, baseTag, commit, pushed} on stdout and
  * everything else — child output included — on stderr. Every refusal is one
  * line on stderr and a non-zero exit. Zero dependencies.
@@ -39,7 +45,7 @@ const { readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 
 const { loadConfig, resolvePackage } = require('./lib/config.cjs')
-const { DEFAULT_SCHEME, nearestAncestorTag } = require('./lib/git-commits.cjs')
+const { DEFAULT_SCHEME, globMatcher, nearestAncestorTag } = require('./lib/git-commits.cjs')
 const { detectPackageManager } = require('./release-hotfix.cjs')
 
 const SEMVER = /^(\d+)\.(\d+)\.(\d+)$/
@@ -140,6 +146,7 @@ function buildPlan(ctx) {
         cmd: `git commit -m "chore(release): ${tag}" -- ${paths.join(' ')}`,
         argv: ['git', 'commit', '-m', `chore(release): ${tag}`, '--', ...paths],
       },
+      ...hashCheckStep(ctx),
       {
         // Annotated: `git push --follow-tags` sends annotated tags only, and a
         // release tag should say who cut it and when.
@@ -149,6 +156,7 @@ function buildPlan(ctx) {
       },
     )
   } else {
+    steps.push(...hashCheckStep(ctx))
     steps.push({
       kind: 'run',
       cmd: `${pm} version ${version}`,
@@ -167,6 +175,62 @@ function buildPlan(ctx) {
     )
   }
   return { mode, name, version, tag, baseTag, steps, pushes, followUp }
+}
+
+// Only when configured: an unset `recordedHashes` adds no step and no output.
+function hashCheckStep(ctx) {
+  const sources = (ctx.release && ctx.release.recordedHashes) || []
+  return sources.length ? [{ kind: 'check-hashes', cmd: 'check recorded commit hashes are in the history being tagged' }] : []
+}
+
+/**
+ * Every hash the configured files record, and whether it is in `ref`'s
+ * history: `ok`, `missing` (it resolves, and is not an ancestor — warn) or
+ * `unknown` (cannot tell).
+ *
+ * WHAT WOULD FOOL THIS: a shallow clone. A hash older than the clone's depth
+ * does not resolve, which is not evidence it was rewritten — so a hash that
+ * does not resolve is `unknown`, never `missing`. Only a hash git can see, and
+ * can see is not an ancestor, is reported as one.
+ */
+function checkHashes(dir, sources, ref = 'HEAD') {
+  const tracked = (tryGit(dir, 'ls-files') || '').split('\n').filter(Boolean)
+  const results = []
+  for (const source of sources) {
+    const globs = source.files.map(globMatcher)
+    const re = new RegExp(source.pattern)
+    for (const file of tracked.filter((f) => globs.some((g) => g(f)))) {
+      let text
+      try {
+        text = readFileSync(join(dir, file), 'utf8')
+      } catch {
+        continue
+      }
+      text.split('\n').forEach((line, i) => {
+        const match = re.exec(line)
+        if (!match || !match[1]) return
+        const hash = match[1]
+        const where = `${file}:${i + 1}`
+        if (!/^[0-9a-f]{4,40}$/i.test(hash) || !tryGit(dir, 'rev-parse', '--verify', '--quiet', `${hash}^{commit}`)) {
+          results.push({ hash, where, state: 'unknown' })
+          return
+        }
+        const r = spawnSync('git', ['merge-base', '--is-ancestor', hash, ref], { cwd: dir })
+        results.push({ hash, where, state: r.status === 0 ? 'ok' : r.status === 1 ? 'missing' : 'unknown' })
+      })
+    }
+  }
+  return results
+}
+
+function formatHashResults(results, ref) {
+  return results
+    .filter((r) => r.state !== 'ok')
+    .map((r) =>
+      r.state === 'missing'
+        ? `⚠ ${r.where}: ${r.hash} is not in the history of ${ref} — rewritten by a rebase?`
+        : `cannot tell — ${r.where}: ${r.hash} is not in this clone`,
+    )
 }
 
 function formatPlan(plan, ctx) {
@@ -335,6 +399,12 @@ function execute(dir, plan, ctx, opts, out) {
       writeVersion(join(dir, ctx.manifest), ctx.version)
       continue
     }
+    if (step.kind === 'check-hashes') {
+      // Warns, never stops: a stale record is worth fixing, not worth a
+      // release that cannot be cut.
+      for (const line of formatHashResults(checkHashes(dir, ctx.release.recordedHashes), 'HEAD')) out(`  ${line}`)
+      continue
+    }
     const result = step.shell
       ? spawnSync(step.shell, { cwd: dir, shell: true, stdio, env: { ...process.env, ...step.env } })
       : spawnSync(step.argv[0], step.argv.slice(1), { cwd: dir, stdio })
@@ -374,11 +444,32 @@ function execute(dir, plan, ctx, opts, out) {
   return { commit, pushed }
 }
 
+/** `check-hashes [<ref>]`: the same check on its own. Always exits 0. */
+function checkHashesCommand(dir, config, ref = 'HEAD') {
+  const sources = (config.release && config.release.recordedHashes) || []
+  if (sources.length === 0) {
+    console.log('check-hashes: release.recordedHashes is not configured — nothing to check')
+    return 0
+  }
+  if (!tryGit(dir, 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`)) {
+    console.log(`cannot tell — ${ref} is not a commit here, so nothing was checked`)
+    return 0
+  }
+  const results = checkHashes(dir, sources, ref)
+  const lines = formatHashResults(results, ref)
+  for (const line of lines) console.log(line)
+  if (lines.length === 0) {
+    console.log(`check-hashes: ${results.length} recorded hash(es), all in the history of ${ref}`)
+  }
+  return 0
+}
+
 function main(argv, dir = process.cwd()) {
   let json = argv.includes('--json')
   const out = (line) => (json ? console.error(line) : console.log(line))
   try {
     const config = loadConfig(dir)
+    if (argv[0] === 'check-hashes') return checkHashesCommand(dir, config, argv[1])
     const opts = parseArgs(argv, Object.keys(config.packages || {}))
     json = opts.json
     const ctx = gather(dir, opts)
@@ -422,4 +513,4 @@ function main(argv, dir = process.cwd()) {
 
 if (require.main === module) process.exitCode = main(process.argv.slice(2))
 
-module.exports = { parseArgs, nextVersion, buildPlan, formatPlan, main, Refusal }
+module.exports = { parseArgs, nextVersion, buildPlan, formatPlan, checkHashes, main, Refusal }

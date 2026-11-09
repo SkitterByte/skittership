@@ -22,7 +22,9 @@ notes. See `.claude/rules/commit-messages.md` for the full commit grammar.
   `skittership.config.json`. A monorepo that tags each package separately
   lists them under `packages` and runs
   `generate-releases.cjs --package <name>`; `--range <from>..<to>` on either
-  generator names the commits outright.
+  generator names the commits outright. With a `release` key,
+  `npm run release` plans a release and cuts it only with `--yes`; it pushes
+  only with `--push`, one tag per push.
 - **Upgrading** — `skittership update` re-syncs the managed files but keeps any
   you have edited, listing them as `customized — kept`; `--force` overwrites
   them. It tells the two apart using `.skittership-manifest.json`, a record of

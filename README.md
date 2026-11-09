@@ -17,6 +17,8 @@ you can adopt release tooling without the spec workflow (and vice versa).
 | `scripts/generate-releases.cjs` | Regenerates the user-facing `RELEASES.md` from `Release-Note:` footers |
 | `scripts/check-release-index.cjs` | Aborts `npm version` if anything unexpected is staged (npm's own commit takes no pathspec) |
 | `scripts/release-hotfix.cjs` | Cuts a `v<base>-hotfix.<N>` release on a hotfix branch, wired as `npm run release:hotfix` (see [Hotfix releases](#hotfix-releases)) |
+| `scripts/release.cjs` | Plans, cuts and (only with `--push`) pushes a release, wired as `npm run release` — only when `release` is configured (see [Cutting a release](#cutting-a-release)) |
+| `scripts/approve-release.cjs` | Approves an npm staged release by version, wired as `npm run approve` — only when `release.staged` is true |
 | `scripts/lib/` | Shared, zero-dependency git/config helpers |
 | `skittership.config.json` | Filenames, product name, scope→area map, feature toggles |
 | `package.json` `version` hook | Regenerates both artifacts at `npm version` (opt-in) |
@@ -188,6 +190,90 @@ to expect: a package with nothing to say still gets its heading and the
 `emptyRelease` placeholder; set `releases.emptyRelease: false` for the old
 skip.
 
+## Cutting a release
+
+Add a `release` key to `skittership.config.json` (`{}` is enough) and `init`
+or `update` installs `scripts/release.cjs` as `npm run release`. It plans by
+default and changes nothing until you say so:
+
+```sh
+npm run release -- minor                 # the plan: every step, nothing run
+npm run release -- minor --yes           # cut it locally: never pushes
+npm run release -- minor --yes --push    # …and push the branch, then the tag
+npm run release -- api minor --yes       # a monorepo package (needs packages.api.dir)
+```
+
+| Level | Does |
+|-------|------|
+| *(none)* | Print the version, tag, base and every step, then stop |
+| `--yes` | Cut it. **Root package:** run the tests and `preTag` hooks, then your own `npm version` (or `pnpm version`), so the version hook writes CHANGELOG and RELEASES as always. **Monorepo package:** bump `<dir>/package.json`, write its notes (`generate-releases.cjs --package`), run the tests and hooks against that exact tree, commit just those two files, and make an annotated tag `<tagPrefix><version>` |
+| `--push` | Also push the branch, then the tag — each in its own `git push` |
+
+**Why one tag per push.** GitHub creates no push event when a single push
+carries more than three tags, so a workflow triggered on tags silently never
+runs. `--push`, and the commands it prints instead, push one ref at a time;
+avoid `git push --tags` and `--follow-tags` after cutting several releases.
+
+A failure before the commit (red tests, a failing hook) commits and tags
+nothing, and prints the `git checkout` / `rm` that puts the bump and notes
+back. It also refuses a dirty tree, an existing tag, a downgrade, `--push`
+without `--yes`, and — in the root package — a `postversion` script that may
+push, unless you pass `--allow-postversion`. `--skip-tests` and
+`--skip-hooks` are said in the plan. `--json` prints
+`{package, version, tag, baseTag, commit, pushed}` on stdout.
+
+**Your own checks are hooks.** `release.preTag` commands run after the tests,
+with `RELEASE_PACKAGE`, `RELEASE_VERSION`, `RELEASE_TAG` and
+`RELEASE_BASE_TAG` (empty on a first release) in their environment. A non-zero
+exit stops the release. Two worth stealing:
+
+```json
+"release": {
+  "test": "pnpm test",
+  "preTag": [
+    "docker run --rm --init -v \"$PWD\":/app -w /app node:22 node --test",
+    "test -z \"$RELEASE_BASE_TAG\" || ! git diff --quiet \"$RELEASE_BASE_TAG\" HEAD -- \"packages/$RELEASE_PACKAGE\""
+  ]
+}
+```
+
+The first runs the suite on Linux before tagging — the commit being tagged is
+the one this command creates, so no CI run for it can exist yet. The second
+refuses a package release in which nothing under the package changed since
+its last tag.
+
+**Recorded hashes.** A repo sometimes writes commit hashes into its own files
+(`verified: 2716308e` in a docs page). A rebase rewrites those commits and
+leaves the records pointing at history that is gone. Name the files and a
+pattern whose group 1 is the hash:
+
+```json
+"release": {
+  "recordedHashes": [{ "files": ["docs/*.html"], "pattern": "^verified: ([0-9a-f]{7,40})" }]
+}
+```
+
+Right before tagging, each recorded hash that is not in the history being
+tagged is **warned** about, with its file and line; the release still goes
+ahead. A hash this clone cannot see at all (a shallow CI checkout) says
+`cannot tell` rather than warning.
+`node scripts/release.cjs check-hashes [<ref>]` runs the same check on its
+own; it always exits 0.
+
+**Approving a staged release.** With npm staged publishing, CI stages the
+build and a person approves it with 2FA. Set `release.staged: true` and
+`npm run approve` resolves the version to npm's stage-id and approves it:
+
+```sh
+npm run approve                  # the version in package.json
+npm run approve 2.0.1            # a specific version, or a stage-id
+npm run approve api 2.0.1        # a monorepo package
+npm run approve -- --reject      # discard it instead
+```
+
+A package's npm name is `packages.<name>.npm`, else the `name` in
+`<dir>/package.json`. It needs npm 11.15.0 or later, and checks.
+
 ## Hotfix releases
 
 A hotfix must be exactly the prod tag plus the fix. Taking the next patch
@@ -252,7 +338,8 @@ It refuses, with one line and a non-zero exit, when:
   },
   "versionHook": true,
   "hotfix": { "branchPrefix": "hotfix/" },
-  "packages": { "api": { "paths": ["packages/api/**"] } }
+  "packages": { "api": { "paths": ["packages/api/**"], "dir": "packages/api" } },
+  "release": { "staged": true, "preTag": [], "recordedHashes": [] }
 }
 ```
 
@@ -267,6 +354,13 @@ defaults to `hotfix/`, and `init` writes it only when you change it.
 [Monorepos](#monorepos-one-notes-file-per-package)). `init` and `update` keep
 it exactly as you wrote it; a malformed entry stops the generators with the
 package and field named.
+
+`release` is optional. Its presence installs `npm run release`;
+`release.staged` adds `npm run approve` and `npm run staged`; `release.test`
+replaces `<pm> test`; `release.preTag` and `release.recordedHashes` are
+described in [Cutting a release](#cutting-a-release). Like `packages` it is
+kept as written, and a malformed value stops the scripts with the field
+named.
 
 ## License
 
