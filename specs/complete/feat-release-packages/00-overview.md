@@ -9,7 +9,7 @@ github_assignee_name: "Reuben Greaves"
 
 > **Type:** Feature
 > **Name:** feat-release-packages (the spec folder name — the handle you paste into `/spec-start`)
-> **Status:** In Progress — Phase 1 (started 2026-11-09)
+> **Status:** Complete (2026-11-09)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-11-09
@@ -129,6 +129,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 |------|--------|--------|----|
 | 2026-11-09 | Ready | backlog | Reuben Greaves |
 | 2026-11-09 | In Progress | in-progress | Reuben Greaves |
+| 2026-11-09 | Complete | complete | Reuben Greaves |
 
 ## Changelog
 
@@ -166,3 +167,5 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   reading it as two-dot. Ends are limited to ref characters before they reach
   the shell. The managed CLAUDE.md section gained one sentence on
   `--package`/`--range`; the README carries the full reference.
+- 2026-11-09 — Completed; all phases done, tests green. Deferred: the
+  `init` drop of `releases.emptyRelease` (follow-up above).
