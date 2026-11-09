@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-11-09
+
+### Added
+- **scripts**: warn on recorded hashes lost to rebase
+- **scripts**: add a plan-first release command
+- **scripts**: ship a staged-release approver
+- **releases**: name a commit range with --range
+- **releases**: per-package notes in a monorepo
+
+### Changed
+- **scripts**: route tag names through a scheme
+
 ## [2.1.0] - 2026-10-21
 
 ### Added

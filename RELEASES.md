@@ -5,6 +5,17 @@ What's new for users of skittership. For the full technical log see
 
 Generated from `Release-Note:` commit footers.
 
+## 2.2.0 — 9 Nov 2026
+
+**Highlights:** A new release command plans a release by default, cuts it with --yes (bump, notes, tests, your own pre-tag checks, commit, tag) and pushes only with --push, one tag at a time so CI always fires. It works per package in a monorepo.
+
+### Release tooling
+- **New** — Releases now warn, without stopping, when a commit hash recorded in your repo (such as a docs page's verified: line) is no longer in the history being tagged, which is what a rebase leaves behind.
+- **New** — A new release command plans a release by default, cuts it with --yes (bump, notes, tests, your own pre-tag checks, commit, tag) and pushes only with --push, one tag at a time so CI always fires. It works per package in a monorepo.
+- **New** — Projects that publish with npm staged publishing can now turn on release.staged to get an approve command that finds the stage-id for a version (or a monorepo package) and approves it.
+- **New** — You can now choose exactly which commits a changelog or release-notes section covers with --range <from>..<to>, instead of relying on the previous tag.
+- **New** — Monorepos can now generate release notes per package, each from its own tag series (for example pkg@1.2.0) and its own paths, with any note that belongs to no package listed rather than silently dropped.
+
 ## 2.1.0 — 21 Oct 2026
 
 **Highlights:** You can now cut a hotfix as v1.2.3-hotfix.1 with npm run release:hotfix: exactly the prod release plus the fix, never a patch number test or demo may already use. If you edited the shipped release scripts, update keeps your copies, so run update --force and re-apply your edits. That also points release:hotfix at the new script.
