@@ -9,7 +9,7 @@ github_assignee_name: "Reuben Greaves"
 
 > **Type:** Feature
 > **Name:** feat-release-command (the spec folder name — the handle you paste into `/spec-start`)
-> **Status:** In Progress — Phase 1 (started 2026-11-09)
+> **Status:** Complete (2026-11-09)
 > **Author:** Reuben Greaves
 > **Developer:** Reuben Greaves
 > **Raised:** 2026-11-09
@@ -125,6 +125,7 @@ does not, and can start first.
 |------|--------|--------|----|
 | 2026-11-09 | Ready | backlog | Reuben Greaves |
 | 2026-11-09 | In Progress | in-progress | Reuben Greaves |
+| 2026-11-09 | Complete | complete | Reuben Greaves |
 
 ## Changelog
 
@@ -154,3 +155,4 @@ does not, and can start first.
   line (only the release path stays fully silent), and a `<ref>` that is not a
   commit is reported as `cannot tell`, exit 0. `recordedHashes` patterns are
   validated to compile and to have a capture group.
+- 2026-11-09 — Completed; all phases done, tests green.
