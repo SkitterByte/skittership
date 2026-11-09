@@ -1,15 +1,17 @@
 ---
 github_identifier: "#5"
 github_url: "https://github.com/SkitterByte/skittership/issues/5"
+github_assignee_id: "SkitterByte"
+github_assignee_name: "Reuben Greaves"
 ---
 
 # A shipped release command: plan, cut, never push
 
 > **Type:** Feature
 > **Name:** feat-release-command (the spec folder name — the handle you paste into `/spec-start`)
-> **Status:** Ready — not started
+> **Status:** In Progress — Phase 1 (started 2026-11-09)
 > **Author:** Reuben Greaves
-> **Developer:** —
+> **Developer:** Reuben Greaves
 > **Raised:** 2026-11-09
 > **Area:** assets/scripts/release.cjs (new), assets/scripts/approve-release.cjs (new), assets/scripts/lib/config.cjs, src/init.js, scripts/ (dogfood copies), package.json, README.md, assets/claude-md-section.md
 > **Stack:** worktree
@@ -122,6 +124,7 @@ does not, and can start first.
 | Date | Status | Folder | By |
 |------|--------|--------|----|
 | 2026-11-09 | Ready | backlog | Reuben Greaves |
+| 2026-11-09 | In Progress | in-progress | Reuben Greaves |
 
 ## Changelog
 
