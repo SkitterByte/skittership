@@ -1,15 +1,17 @@
 ---
 github_identifier: "#1"
 github_url: "https://github.com/SkitterByte/skittership/issues/1"
+github_assignee_id: "SkitterByte"
+github_assignee_name: "Reuben Greaves"
 ---
 
 # Per-package release notes for monorepo tag series
 
 > **Type:** Feature
 > **Name:** feat-release-packages (the spec folder name — the handle you paste into `/spec-start`)
-> **Status:** Ready — not started
+> **Status:** In Progress — Phase 1 (started 2026-11-09)
 > **Author:** Reuben Greaves
-> **Developer:** —
+> **Developer:** Reuben Greaves
 > **Raised:** 2026-11-09
 > **Area:** assets/scripts/lib/git-commits.cjs, assets/scripts/lib/config.cjs, assets/scripts/generate-releases.cjs, assets/scripts/generate-changelog.cjs, src/init.js, scripts/ (dogfood copies), README.md, assets/claude-md-section.md
 > **Stack:** worktree
@@ -126,6 +128,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 | Date | Status | Folder | By |
 |------|--------|--------|----|
 | 2026-11-09 | Ready | backlog | Reuben Greaves |
+| 2026-11-09 | In Progress | in-progress | Reuben Greaves |
 
 ## Changelog
 
