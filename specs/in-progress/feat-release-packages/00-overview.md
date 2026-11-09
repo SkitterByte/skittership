@@ -116,7 +116,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 | # | Phase | Status | File |
 |---|-------|--------|------|
 | 1 | Tag scheme replaces the hardcoded `v`, output unchanged | ✅ | [01-tag-scheme.md](01-tag-scheme.md) |
-| 2 | `packages` config, `--package`, path attribution, orphans | ⬜ | [02-packages.md](02-packages.md) |
+| 2 | `packages` config, `--package`, path attribution, orphans | ✅ | [02-packages.md](02-packages.md) |
 | 3 | `--range`, docs, skitterspec-shaped fixture | ⬜ | [03-range-and-docs.md](03-range-and-docs.md) |
 
 ## Open questions
@@ -151,3 +151,13 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   rather than in phase 2, because threading a scheme without it would refuse
   every new package. Golden output was captured from main's scripts
   (`test/fixtures/golden-default-scheme.json`) and matched byte for byte.
+- 2026-11-09 — Phase 2: `packages` is validated on load but kept exactly as
+  written (`resolvePackage` fills defaults at use), so `init` writes back what
+  the user wrote; `packages: null` reads as absent. A plain path in `paths`
+  (no wildcard) matches itself and everything beneath it. An orphan is a
+  commit whose footer would produce a note — `Release-Note: none` and
+  non-user-facing types are not reported.
+- 2026-11-09 — Follow-up surfaced: re-running `skittership init` drops
+  `releases.emptyRelease` from the config (`serializeConfig` never carries
+  it); `update` does not rewrite the config, so it is unaffected. Predates
+  this spec; not in scope here.

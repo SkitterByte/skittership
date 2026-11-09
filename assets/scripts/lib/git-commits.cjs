@@ -18,7 +18,14 @@
 
 const { execSync } = require('node:child_process')
 
-function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHEME } = {}) {
+function getCommitsSinceLastTag(
+  currentVersion,
+  { onRange, scheme = DEFAULT_SCHEME, withFiles = false } = {},
+) {
+  // `withFiles` also lists each commit's changed paths, for attributing a
+  // commit to the packages it touches. It changes only the format and the
+  // parser; the range is chosen exactly as without it.
+  const walk = walkFor(withFiles)
   // The range is reported through a callback rather than a new return shape:
   // a wrong range and a right range both printed the same success line, which
   // is how an inverted index lived in a released package across versions.
@@ -54,13 +61,13 @@ function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHE
 
     if (allTags.length === 0) {
       // No tags exist, get all commits
-      const output = execSync('git log --pretty=format:"%h%x00%s%x00%b%x00" --no-merges', {
+      const output = execSync(`git log ${walk.format}`, {
         encoding: 'utf-8',
         stdio: 'pipe',
       }).trim()
 
       report('all history — no tags')
-      return reconstructCommits(output)
+      return walk.parse(output)
     }
 
     // Check if HEAD is at a tag
@@ -119,12 +126,12 @@ function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHE
         // unbounded log folds work done AFTER the release into the released
         // section.
         const output = execSync(
-          `git log ${currentTag} --pretty=format:"%h%x00%s%x00%b%x00" --no-merges`,
+          `git log ${currentTag} ${walk.format}`,
           { encoding: 'utf-8', stdio: 'pipe' },
         ).trim()
 
         report(`all history through ${currentTag} — no earlier tag`)
-        return reconstructCommits(output)
+        return walk.parse(output)
       }
     } else {
       previousTag = nearestAncestorTag('HEAD', scheme)
@@ -151,23 +158,23 @@ function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHE
     // NOTE: do NOT pass --all here — it traverses every ref (branches,
     // remotes, tags) and leaks commits from unmerged branches into the
     // range. Shallow-clone fallback below uses git fetch --unshallow.
-    const output = execSync(`git log ${rangeSince(previousTag, rangeEnd)} ${FORMAT}`, {
+    const output = execSync(`git log ${rangeSince(previousTag, rangeEnd)} ${walk.format}`, {
       encoding: 'utf-8',
       stdio: 'pipe',
     }).trim()
 
-    const commits = reconstructCommits(output)
+    const commits = walk.parse(output)
 
     // If no commits found and we're in CI, try unshallow the repo
     if (commits.length === 0) {
       try {
         execSync('git fetch --unshallow', { encoding: 'utf-8', stdio: 'pipe' })
         // Try again after unshallow
-        const retryOutput = execSync(`git log ${rangeSince(previousTag, rangeEnd)} ${FORMAT}`, {
+        const retryOutput = execSync(`git log ${rangeSince(previousTag, rangeEnd)} ${walk.format}`, {
           encoding: 'utf-8',
           stdio: 'pipe',
         }).trim()
-        return reconstructCommits(retryOutput)
+        return walk.parse(retryOutput)
       } catch {
         // Unshallow failed or not a shallow clone, return empty
       }
@@ -180,7 +187,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHE
     if (error.code === 'NO_BASE_TAG') throw error
     // If git commands fail, try to get all commits as fallback
     try {
-      const output = execSync('git log --pretty=format:"%h%x00%s%x00%b%x00" --no-merges', {
+      const output = execSync(`git log ${walk.format}`, {
         encoding: 'utf-8',
         stdio: 'pipe',
       }).trim()
@@ -188,7 +195,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHE
       // Worth naming loudly: this is the whole history because git ERRORED,
       // not because the range said so.
       report('all history — git failed, fell back')
-      return reconstructCommits(output)
+      return walk.parse(output)
     } catch {
       console.error('Failed to get git commits:', error)
       return []
@@ -197,6 +204,16 @@ function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHE
 }
 
 const FORMAT = '--pretty=format:"%h%x00%s%x00%b%x00" --no-merges'
+
+// The same fields, each record opened by an RS (%x1e) so the file list
+// --name-only appends after the body cannot be mistaken for the next commit.
+const FILES_FORMAT = '--pretty=format:"%x1e%h%x00%s%x00%b%x00" --no-merges --name-only'
+
+function walkFor(withFiles) {
+  return withFiles
+    ? { format: FILES_FORMAT, parse: reconstructCommitsWithFiles }
+    : { format: FORMAT, parse: reconstructCommits }
+}
 
 // Release tags `git describe` may answer with: `v1.2.3`, `1.2.3`, and their
 // `-suffix` forms. A glob, so it also admits `v1.2.3-anything`.
@@ -364,6 +381,61 @@ function reconstructCommits(output) {
   return commits
 }
 
+/**
+ * Like `reconstructCommits`, for FILES_FORMAT output: each commit as
+ * `{ line, files }`, where `line` is the `hash\0subject\0body` string
+ * `parseCommit` takes.
+ */
+function reconstructCommitsWithFiles(output) {
+  const commits = []
+  for (const record of output.split('\x1e')) {
+    const parts = record.split('\0')
+    if (parts.length < 4) continue
+    const [hash, subject, body, rest] = parts
+    if (!hash.trim() || !subject.trim()) continue
+    const files = rest
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean)
+    commits.push({ line: `${hash}\0${subject}\0${body}`, files })
+  }
+  return commits
+}
+
+/**
+ * A path glob as a matcher: `**` crosses directories, `*` and `?` do not. A
+ * pattern with no wildcard matches that path and everything beneath it, so
+ * `packages/common` and `packages/common/**` mean the same thing.
+ */
+function globMatcher(pattern) {
+  const glob = pattern.trim().replace(/^\.\//, '')
+  if (!/[*?]/.test(glob)) {
+    const dir = glob.replace(/\/+$/, '')
+    return (file) => file === dir || file.startsWith(`${dir}/`)
+  }
+  let source = ''
+  for (let i = 0; i < glob.length; i += 1) {
+    const ch = glob[i]
+    if (ch === '*' && glob[i + 1] === '*') {
+      i += 1
+      if (glob[i + 1] === '/') {
+        i += 1
+        source += '(?:.*/)?'
+      } else {
+        source += '.*'
+      }
+    } else if (ch === '*') {
+      source += '[^/]*'
+    } else if (ch === '?') {
+      source += '[^/]'
+    } else {
+      source += escapeRegex(ch)
+    }
+  }
+  const re = new RegExp(`^${source}$`)
+  return (file) => re.test(file)
+}
+
 function parseCommit(commitLine) {
   // Split by null character (used as delimiter in git log format)
   const parts = commitLine.split('\0')
@@ -418,13 +490,14 @@ function getAllVersionTags(scheme = DEFAULT_SCHEME) {
     .filter((t) => scheme.versionOf(t) !== null)
 }
 
-function getCommitsBetween(fromTag, toTag) {
+function getCommitsBetween(fromTag, toTag, { withFiles = false } = {}) {
+  const walk = walkFor(withFiles)
   const range = fromTag ? rangeSince(fromTag, toTag) : toTag
-  const output = execSync(`git log ${range} ${FORMAT}`, {
+  const output = execSync(`git log ${range} ${walk.format}`, {
     encoding: 'utf-8',
     stdio: 'pipe',
   }).trim()
-  return reconstructCommits(output)
+  return walk.parse(output)
 }
 
 /** Does this tag exist? Used to tell "already released" from "being released". */
@@ -558,7 +631,9 @@ module.exports = {
   indexOfOlderSection,
   nearestAncestorTag,
   getCommitsSinceLastTag,
+  globMatcher,
   reconstructCommits,
+  reconstructCommitsWithFiles,
   parseCommit,
   getAllVersionTags,
   getCommitsBetween,

@@ -230,6 +230,7 @@ function releaseFromConfig(cfg) {
     },
     versionHook: cfg.versionHook,
     hotfix: cfg.hotfix,
+    packages: cfg.packages,
   }
 }
 
@@ -246,6 +247,9 @@ function serializeConfig(release) {
   if (release.hotfix && release.hotfix.branchPrefix !== DEFAULT_CONFIG.hotfix.branchPrefix) {
     config.hotfix = { branchPrefix: release.hotfix.branchPrefix }
   }
+  // Written back exactly as the user wrote it — the loader validates it but
+  // fills no defaults in, so a rewrite never expands a terse entry.
+  if (release.packages) config.packages = release.packages
   return JSON.stringify(config, null, 2) + '\n'
 }
 
