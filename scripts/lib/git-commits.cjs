@@ -20,7 +20,7 @@ const { execSync } = require('node:child_process')
 
 function getCommitsSinceLastTag(
   currentVersion,
-  { onRange, scheme = DEFAULT_SCHEME, withFiles = false } = {},
+  { onRange, scheme = DEFAULT_SCHEME, withFiles = false, range = null } = {},
 ) {
   // `withFiles` also lists each commit's changed paths, for attributing a
   // commit to the packages it touches. It changes only the format and the
@@ -29,9 +29,28 @@ function getCommitsSinceLastTag(
   // The range is reported through a callback rather than a new return shape:
   // a wrong range and a right range both printed the same success line, which
   // is how an inverted index lived in a released package across versions.
-  const report = (range) => {
-    if (typeof onRange === 'function') onRange(range)
+  const report = (text) => {
+    if (typeof onRange === 'function') onRange(text)
   }
+
+  // An explicit `--range` names the base, so none of the inference below runs
+  // — not RELEASE_BASE_TAG, not the ancestor lookup. Checked before the
+  // try/catch: an end that does not resolve is the caller's mistake, and the
+  // all-history fallback there would turn it into a whole-history section.
+  if (range) {
+    for (const end of [range.from, range.to]) {
+      if (!SAFE_REF.test(String(end)) || !tagExists(end)) {
+        throw rangeError(`--range end "${end}" is not a commit in this repository.`)
+      }
+    }
+    report(`${describeRange(range.from, range.to)} (--range)`)
+    const output = execSync(`git log ${rangeSince(range.from, range.to)} ${walk.format}`, {
+      encoding: 'utf-8',
+      stdio: 'pipe',
+    }).trim()
+    return walk.parse(output)
+  }
+
   try {
     // Fetch tags to ensure they're available (important in CI)
     try {
@@ -303,6 +322,33 @@ function nearestAncestorTag(ref, scheme = DEFAULT_SCHEME) {
     return null
   }
   return describe()
+}
+
+// Commit-ish characters git accepts in a range end; anything else would reach
+// the shell, so it is refused rather than quoted.
+const SAFE_REF = /^[A-Za-z0-9@._/^~{}:+-]+$/
+
+/**
+ * `--range <from>..<to>` as `{ from, to }`. Two dots only: the three-dot form
+ * already means something to git, and the walk applies its own cherry-pick
+ * filter on top, so accepting it would silently mean something else.
+ */
+function parseRange(text) {
+  const value = String(text || '')
+  const parts = value.split('..')
+  if (parts.length !== 2 || value.includes('...') || !parts[0] || !parts[1]) {
+    throw rangeError(`--range takes <from>..<to> (two dots, both ends named), not "${value}".`)
+  }
+  for (const end of parts) {
+    if (!SAFE_REF.test(end)) throw rangeError(`--range end "${end}" is not a usable git ref.`)
+  }
+  return { from: parts[0], to: parts[1] }
+}
+
+function rangeError(reason) {
+  const error = new Error(`${reason}\n  Nothing was written.`)
+  error.code = 'BAD_RANGE'
+  return error
 }
 
 function baseTagError(reason) {
@@ -632,6 +678,7 @@ module.exports = {
   nearestAncestorTag,
   getCommitsSinceLastTag,
   globMatcher,
+  parseRange,
   reconstructCommits,
   reconstructCommitsWithFiles,
   parseCommit,

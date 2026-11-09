@@ -129,6 +129,65 @@ If tags exist but none is in HEAD's history, even after a shallow clone is
 deepened, the generators refuse and write nothing rather than guess. Set
 `RELEASE_BASE_TAG` to go on.
 
+**Naming the range yourself.** `--range <from>..<to>` on either generator
+skips all of that and walks exactly the commits in `<to>` that `<from>` does
+not carry. It wins over `RELEASE_BASE_TAG`, refuses (writing nothing) when
+either end is not a commit, and does not combine with `--retro`:
+
+```sh
+node scripts/generate-releases.cjs --range v1.4.0..HEAD 1.5.0
+```
+
+## Monorepos: one notes file per package
+
+A repo that tags each package separately (`api@2.1.0`, `web@7.0.3`) cannot use
+"the nearest earlier tag": the nearest one usually belongs to another package.
+List the packages in `skittership.config.json` and generate per package:
+
+```json
+"packages": {
+  "api": { "paths": ["packages/shared/**", "packages/api/**"], "dir": "packages/api" },
+  "web": { "paths": ["packages/shared/**", "packages/web/**"], "tagPrefix": "web-v" }
+}
+```
+
+```sh
+node scripts/generate-releases.cjs --package api          # version from packages/api/package.json
+node scripts/generate-releases.cjs --package web 7.1.0
+node scripts/generate-releases.cjs --package api --retro  # backfill api's own tags only
+```
+
+| Field | Default | Does |
+|-------|---------|------|
+| `tagPrefix` | `<name>@` | The package's tags are `<tagPrefix><version>`. Must end in `@ - _ / .`, so one package's tags can never match another's |
+| `paths` | every commit | Globs (`**`, `*`, `?`) over changed files. A commit belongs to **every** package one of its files matches, so a shared library's change appears in each package that lists it. A path with no wildcard covers everything beneath it |
+| `releasesFile` | `RELEASES-<name>.md` | Where that package's notes go |
+| `productName` | `<name>` | The name in that file's header |
+| `dir` | — | Where the package's `package.json` is, so the version can be left off |
+
+Each package's base is its own nearest earlier tag. A package with **no** tags
+yet is a first release and takes all history. One whose tags exist but none is
+in HEAD's history refuses, as above.
+
+**Every `--package` run lists the notes no package claims** — a commit with a
+`Release-Note:` footer whose files match no package's `paths` (a docs page, a
+build script). They are left out, and named, because a note dropped in
+silence looks exactly like a note lost. Usually the fix is to remove the
+footer: a change that ships in no package is not user-facing.
+
+Without `--package`, a `packages` map changes nothing: `RELEASES.md`,
+`CHANGELOG.md` and the version hook behave as before. `CHANGELOG.md` stays
+one file; `--package` is for release notes only.
+
+**Migrating from a hand-written release-notes script.** If yours chose the
+commits and called `generate-releases.cjs`'s render functions, the
+`packages` map is that script as config: its tag series become `tagPrefix`,
+its path→package table becomes `paths`, and its orphan report is built in.
+Compare one release's output from both before deleting yours. One difference
+to expect: a package with nothing to say still gets its heading and the
+`emptyRelease` placeholder; set `releases.emptyRelease: false` for the old
+skip.
+
 ## Hotfix releases
 
 A hotfix must be exactly the prod tag plus the fix. Taking the next patch
@@ -192,7 +251,8 @@ It refuses, with one line and a non-zero exit, when:
     "emptyRelease": true
   },
   "versionHook": true,
-  "hotfix": { "branchPrefix": "hotfix/" }
+  "hotfix": { "branchPrefix": "hotfix/" },
+  "packages": { "api": { "paths": ["packages/api/**"] } }
 }
 ```
 
@@ -202,6 +262,11 @@ for your own wording, or `false` to write no section for it at all.
 
 `hotfix.branchPrefix` sets the branches `release:hotfix` will run on. It
 defaults to `hotfix/`, and `init` writes it only when you change it.
+
+`packages` is optional, and read only by `--package` (see
+[Monorepos](#monorepos-one-notes-file-per-package)). `init` and `update` keep
+it exactly as you wrote it; a malformed entry stops the generators with the
+package and field named.
 
 ## License
 

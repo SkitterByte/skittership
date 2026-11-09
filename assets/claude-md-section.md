@@ -16,7 +16,10 @@ notes. See `.claude/rules/commit-messages.md` for the full commit grammar.
   release notes (`RELEASES.md`) are regenerated from commits at `npm version`
   (when the hook is wired), or on demand via `npm run changelog` / `npm run
   releases`. Filenames, product name, and the scope→area map live in
-  `skittership.config.json`.
+  `skittership.config.json`. A monorepo that tags each package separately
+  lists them under `packages` and runs
+  `generate-releases.cjs --package <name>`; `--range <from>..<to>` on either
+  generator names the commits outright.
 - **Upgrading** — `skittership update` re-syncs the managed files but keeps any
   you have edited, listing them as `customized — kept`; `--force` overwrites
   them. It tells the two apart using `.skittership-manifest.json`, a record of

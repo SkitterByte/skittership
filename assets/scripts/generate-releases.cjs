@@ -44,6 +44,7 @@ const {
   indexOfOlderSection,
   nearestAncestorTag,
   parseCommit,
+  parseRange,
   countCommitsSince,
   tagExists,
   VERSION_PATTERN,
@@ -288,6 +289,26 @@ function packageOptions(config, name) {
   }
 }
 
+/**
+ * Pull `--range <from>..<to>` out of the arguments, so what remains reads as
+ * before. Exits non-zero, having written nothing, on a malformed range or one
+ * combined with --retro (which pairs tags itself).
+ */
+function takeRangeArg(args, usage) {
+  const idx = args.indexOf('--range')
+  if (idx < 0) return { range: null, rest: args }
+  const rest = [...args.slice(0, idx), ...args.slice(idx + 2)]
+  try {
+    if (rest.includes('--retro')) {
+      throw new Error('--range and --retro do not combine: --retro pairs each tag with its own base.')
+    }
+    return { range: parseRange(args[idx + 1]), rest }
+  } catch (error) {
+    console.error(`\n✖ ${error.message}\n  ${usage}\n`)
+    process.exit(1)
+  }
+}
+
 /** `--package <name>` is pulled out first, so what remains reads as before. */
 function takePackageArg(args) {
   const idx = args.indexOf('--package')
@@ -389,6 +410,7 @@ function writeRelease(newVersion, options, orphans) {
     onRange: (r) => (range = r),
     scheme,
     withFiles: Boolean(attribution),
+    range: options.range || null,
   })
   const selected = select(walked, attribution)
   orphans.push(...selected.orphans)
@@ -502,7 +524,11 @@ function retroFillReleases(count, options = {}) {
 }
 
 function main(argv) {
-  const { name: packageName, rest: args } = takePackageArg(argv.slice(2))
+  const { name: packageName, rest: afterPackage } = takePackageArg(argv.slice(2))
+  const { range, rest: args } = takeRangeArg(
+    afterPackage,
+    'Usage: generate-releases.cjs [--package <name>] --range <from>..<to> [version]',
+  )
 
   let config
   try {
@@ -524,6 +550,7 @@ function main(argv) {
     changelogFile: config.changelog.file,
     emptyRelease: config.releases.emptyRelease,
   }
+  if (range) options.range = range
   let versionDir = '.'
   if (packageName) {
     const { pkg, options: overrides } = packageOptions(config, packageName)
@@ -561,7 +588,7 @@ function main(argv) {
       }
       updateReleases(version, options)
     } catch (error) {
-      if (error.code !== 'NO_BASE_TAG') throw error
+      if (error.code !== 'NO_BASE_TAG' && error.code !== 'BAD_RANGE') throw error
       console.error(`\n✖ ${error.message}\n`)
       process.exit(1)
     }

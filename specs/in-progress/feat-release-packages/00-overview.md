@@ -117,7 +117,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 |---|-------|--------|------|
 | 1 | Tag scheme replaces the hardcoded `v`, output unchanged | ✅ | [01-tag-scheme.md](01-tag-scheme.md) |
 | 2 | `packages` config, `--package`, path attribution, orphans | ✅ | [02-packages.md](02-packages.md) |
-| 3 | `--range`, docs, skitterspec-shaped fixture | ⬜ | [03-range-and-docs.md](03-range-and-docs.md) |
+| 3 | `--range`, docs, skitterspec-shaped fixture | ✅ | [03-range-and-docs.md](03-range-and-docs.md) |
 
 ## Open questions
 
@@ -161,3 +161,8 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   `releases.emptyRelease` from the config (`serializeConfig` never carries
   it); `update` does not rewrite the config, so it is unaffected. Predates
   this spec; not in scope here.
+- 2026-11-09 — Phase 3: `--range` refuses alongside `--retro` (which pairs
+  each tag with its own base), and refuses a three-dot range rather than
+  reading it as two-dot. Ends are limited to ref characters before they reach
+  the shell. The managed CLAUDE.md section gained one sentence on
+  `--package`/`--range`; the README carries the full reference.
