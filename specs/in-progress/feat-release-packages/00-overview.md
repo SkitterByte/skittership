@@ -115,7 +115,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 
 | # | Phase | Status | File |
 |---|-------|--------|------|
-| 1 | Tag scheme replaces the hardcoded `v`, output unchanged | ⬜ | [01-tag-scheme.md](01-tag-scheme.md) |
+| 1 | Tag scheme replaces the hardcoded `v`, output unchanged | ✅ | [01-tag-scheme.md](01-tag-scheme.md) |
 | 2 | `packages` config, `--package`, path attribution, orphans | ⬜ | [02-packages.md](02-packages.md) |
 | 3 | `--range`, docs, skitterspec-shaped fixture | ⬜ | [03-range-and-docs.md](03-range-and-docs.md) |
 
@@ -142,3 +142,12 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
   walking. LSC releases by branch, manually; skitterspec lands `--ff-only`, so
   neither has a user here. feat-hotfix-suffix-release Decision 3 (a carried
   hotfix reappears in main's next section) stands.
+- 2026-11-09 — Phase 1: the blind spot was not as the task stated. A glob
+  `pkg[0-9]*` also matches a sibling `pkg2@1.0.0`, which `versionOf` rejects,
+  so `tagScheme` now refuses a package prefix that does not end in `@ - _ / .`
+  (and any character needing shell quoting). Phase 2's config validation
+  inherits that rule.
+- 2026-11-09 — Phase 1: Decision 4 (first release of a prefix) landed here
+  rather than in phase 2, because threading a scheme without it would refuse
+  every new package. Golden output was captured from main's scripts
+  (`test/fixtures/golden-default-scheme.json`) and matched byte for byte.

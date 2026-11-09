@@ -18,7 +18,7 @@
 
 const { execSync } = require('node:child_process')
 
-function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
+function getCommitsSinceLastTag(currentVersion, { onRange, scheme = DEFAULT_SCHEME } = {}) {
   // The range is reported through a callback rather than a new return shape:
   // a wrong range and a right range both printed the same success line, which
   // is how an inverted index lived in a released package across versions.
@@ -34,6 +34,11 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
     }
 
     // Get all tags sorted by version (newest first)
+    //
+    // Under the default scheme every tag counts, as it always has. Under a
+    // package's scheme only that package's tags do: another series' tags say
+    // nothing about where this one starts, so "no tag of mine anywhere" is a
+    // first release rather than a history that cannot be read.
     const allTags = execSync('git tag --sort=-version:refname', {
       encoding: 'utf-8',
       stdio: 'pipe',
@@ -41,6 +46,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       .trim()
       .split('\n')
       .filter((tag) => tag.trim().length > 0)
+      .filter((tag) => scheme.isDefault || scheme.versionOf(tag) !== null)
 
     // Determine the previous tag to compare against
     let previousTag = null
@@ -67,11 +73,11 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       // HEAD is not at a tag - try to get current branch/tag from environment
       // In CI, Build.SourceBranchName might be available
       const sourceBranch = process.env.BUILD_SOURCEBRANCHNAME || process.env.BUILD_SOURCEBRANCH
-      if (sourceBranch && sourceBranch.startsWith('v')) {
+      if (sourceBranch && sourceBranch.startsWith(scheme.prefix)) {
         currentTag = sourceBranch
       } else if (currentVersion) {
         // Use the version parameter as fallback (e.g., "8.0.0" -> "v8.0.0")
-        const versionTag = `v${currentVersion}`
+        const versionTag = scheme.tagFor(currentVersion)
         if (allTags.includes(versionTag)) {
           currentTag = versionTag
         }
@@ -105,7 +111,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
       // `npm version` never reaches this branch — the version being released
       // has no tag yet — so it is the manual path (`npm run changelog`
       // between releases) that depends on it.
-      previousTag = nearestAncestorTag(`${currentTag}^`)
+      previousTag = nearestAncestorTag(`${currentTag}^`, scheme)
       if (!previousTag) {
         // This is the FIRST release in its history: everything up to and
         // including it. Bound by the tag, NOT bare `git log` — when currentTag
@@ -121,7 +127,7 @@ function getCommitsSinceLastTag(currentVersion, { onRange } = {}) {
         return reconstructCommits(output)
       }
     } else {
-      previousTag = nearestAncestorTag('HEAD')
+      previousTag = nearestAncestorTag('HEAD', scheme)
       if (!previousTag) {
         // Tags exist, yet none is an ancestor even after unshallowing. That
         // is either a first release on a branch cut before any tag, or a
@@ -196,6 +202,53 @@ const FORMAT = '--pretty=format:"%h%x00%s%x00%b%x00" --no-merges'
 // `-suffix` forms. A glob, so it also admits `v1.2.3-anything`.
 const DESCRIBE_MATCH = '--match "v[0-9]*.[0-9]*.[0-9]*" --match "[0-9]*.[0-9]*.[0-9]*"'
 
+// What a prefix may contain. It is spliced into a shell command, so anything
+// outside this set is refused rather than quoted.
+const SAFE_PREFIX = /^[A-Za-z0-9@._/-]+$/
+
+/**
+ * How a release's version and its tag map to each other.
+ *
+ * The default scheme is the one the generators have always used: `v1.2.3`, or
+ * a bare `1.2.3`. A package in a monorepo has its own, `<prefix><version>`
+ * (`skitterspec-linear@17.0.0`), so its base, its dates and its listing ignore
+ * every other series.
+ *
+ * WHAT WOULD FOOL THIS: `git describe` matches a glob, `versionOf` a regex,
+ * and they must agree on which tags are this scheme's. They part ways when a
+ * prefix ends in a letter or digit: `pkg[0-9]*` also matches `pkg2@1.0.0`, a
+ * sibling's tag, which `versionOf` rejects. So a package prefix must end in a
+ * separator (`@ - _ / .`); the default `v` is exempt because `v` followed by a
+ * digit is the whole of that scheme.
+ */
+function tagScheme(prefix = 'v') {
+  if (prefix === 'v') return DEFAULT_SCHEME
+  if (typeof prefix !== 'string' || !SAFE_PREFIX.test(prefix) || !/[@\-_/.]$/.test(prefix)) {
+    throw new Error(
+      `tag prefix ${JSON.stringify(prefix)} must be letters, digits or @._/- and end in one of @-_/.`,
+    )
+  }
+  const re = new RegExp(`^${escapeRegex(prefix)}(\\d+\\.\\d+\\.\\d+.*)$`)
+  return Object.freeze({
+    prefix,
+    isDefault: false,
+    tagFor: (version) => `${prefix}${version}`,
+    versionOf: (tag) => {
+      const match = re.exec(String(tag))
+      return match ? match[1] : null
+    },
+    describeMatch: `--match "${prefix}[0-9]*.[0-9]*.[0-9]*"`,
+  })
+}
+
+const DEFAULT_SCHEME = Object.freeze({
+  prefix: 'v',
+  isDefault: true,
+  tagFor: (version) => `v${version}`,
+  versionOf: (tag) => (/^v?\d+\.\d+\.\d+/.test(tag) ? String(tag).replace(/^v/, '') : null),
+  describeMatch: DESCRIBE_MATCH,
+})
+
 /**
  * The nearest release tag reachable from `ref` (including `ref` itself), or
  * null when there is none.
@@ -205,10 +258,10 @@ const DESCRIBE_MATCH = '--match "v[0-9]*.[0-9]*.[0-9]*" --match "[0-9]*.[0-9]*.[
  * CI checkout this runs in. On a miss in a shallow repo, unshallow and ask
  * again before answering null.
  */
-function nearestAncestorTag(ref) {
+function nearestAncestorTag(ref, scheme = DEFAULT_SCHEME) {
   const describe = () => {
     try {
-      return execSync(`git describe --tags --abbrev=0 ${DESCRIBE_MATCH} ${ref}`, {
+      return execSync(`git describe --tags --abbrev=0 ${scheme.describeMatch} ${ref}`, {
         encoding: 'utf-8',
         stdio: 'pipe',
       }).trim()
@@ -351,7 +404,7 @@ function parseCommit(commitLine) {
   }
 }
 
-function getAllVersionTags() {
+function getAllVersionTags(scheme = DEFAULT_SCHEME) {
   try {
     execSync('git fetch --tags --force', { encoding: 'utf-8', stdio: 'pipe' })
   } catch {
@@ -362,7 +415,7 @@ function getAllVersionTags() {
     .trim()
     .split('\n')
     .map((t) => t.trim())
-    .filter((t) => /^v?\d+\.\d+\.\d+/.test(t))
+    .filter((t) => scheme.versionOf(t) !== null)
 }
 
 function getCommitsBetween(fromTag, toTag) {
@@ -496,6 +549,8 @@ function indexOfOlderSection(content, version, headingRegex) {
 }
 
 module.exports = {
+  DEFAULT_SCHEME,
+  tagScheme,
   VERSION_PATTERN,
   compareVersions,
   countCommitsSince,

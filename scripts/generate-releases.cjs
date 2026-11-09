@@ -34,6 +34,7 @@ const { existsSync, readFileSync, writeFileSync } = require('node:fs')
 const { basename, join } = require('node:path')
 
 const {
+  DEFAULT_SCHEME,
   escapeRegex,
   getAllVersionTags,
   getCommitsBetween,
@@ -273,18 +274,20 @@ function resolveOptions(options = {}) {
     changelogFile: options.changelogFile || 'CHANGELOG.md',
     // `null` is the explicit off; only an absent option takes the default.
     emptyRelease: options.emptyRelease === undefined ? DEFAULT_EMPTY_RELEASE : options.emptyRelease,
+    scheme: options.scheme || DEFAULT_SCHEME,
   }
 }
 
 function updateReleases(newVersion, options = {}) {
-  const { file, productName, scopeAreas, changelogFile, emptyRelease } = resolveOptions(options)
+  const { file, productName, scopeAreas, changelogFile, emptyRelease, scheme } =
+    resolveOptions(options)
   const releasesPath = join(process.cwd(), file)
   const header = defaultReleasesHeader(productName, changelogFile)
   let content = readReleases(releasesPath, header)
 
   let range = 'unknown range'
   const notes = notesFor(
-    getCommitsSinceLastTag(newVersion, { onRange: (r) => (range = r) }),
+    getCommitsSinceLastTag(newVersion, { onRange: (r) => (range = r), scheme }),
     scopeAreas,
   )
   if (notes.length === 0 && !emptyRelease) {
@@ -300,7 +303,7 @@ function updateReleases(newVersion, options = {}) {
   // re-stamping a shipped release with the current date. getTagDate falls back
   // to today when the tag does not exist, which is the `npm version` path —
   // the version being released has no tag yet, so that stays unchanged.
-  const date = getTagDate(`v${newVersion}`)
+  const date = getTagDate(scheme.tagFor(newVersion))
   const section = renderReleasesSection(newVersion, date, notes, emptyRelease)
   const before = content
   content = upsertReleasesSection(content, section, newVersion)
@@ -309,7 +312,7 @@ function updateReleases(newVersion, options = {}) {
     // Do not claim an update that did not happen — and when the version is
     // already tagged, say how much work is deliberately excluded, so "no diff"
     // cannot read as "nothing pending".
-    const tag = `v${newVersion}`
+    const tag = scheme.tagFor(newVersion)
     if (tagExists(tag)) {
       const pending = countCommitsSince(tag)
       console.log(`${tag} is already tagged — ${file} unchanged.`)
@@ -334,12 +337,13 @@ function updateReleases(newVersion, options = {}) {
 }
 
 function retroFillReleases(count, options = {}) {
-  const { file, productName, scopeAreas, changelogFile, emptyRelease } = resolveOptions(options)
+  const { file, productName, scopeAreas, changelogFile, emptyRelease, scheme } =
+    resolveOptions(options)
   const releasesPath = join(process.cwd(), file)
   const header = defaultReleasesHeader(productName, changelogFile)
   let content = readReleases(releasesPath, header)
 
-  const tags = getAllVersionTags()
+  const tags = getAllVersionTags(scheme)
   if (tags.length === 0) {
     console.log('No version tags found — nothing to retro-fill')
     return
@@ -352,8 +356,8 @@ function retroFillReleases(count, options = {}) {
   for (const tag of targets) {
     // The release this one built on — its nearest ancestor tag, not its
     // neighbour by sort, which for a hotfix is a tag on another line.
-    const previousTag = nearestAncestorTag(`${tag}^`)
-    const version = tag.replace(/^v/, '')
+    const previousTag = nearestAncestorTag(`${tag}^`, scheme)
+    const version = scheme.versionOf(tag)
     const notes = notesFor(getCommitsBetween(previousTag, tag), scopeAreas)
 
     if (notes.length === 0 && !emptyRelease) {
