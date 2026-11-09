@@ -40,6 +40,9 @@ const HOTFIX_SCRIPT = path.join('scripts', 'release-hotfix.cjs')
 // Resolves a version to an npm stage-id and approves it. Installed only when
 // `release.staged` is true: staged publishing is a choice, not a default.
 const APPROVE_SCRIPT = path.join('scripts', 'approve-release.cjs')
+// Plans, cuts and (only with --push) pushes a release. Installed whenever a
+// `release` key is present.
+const RELEASE_SCRIPT = path.join('scripts', 'release.cjs')
 
 // Pre-1.1 the same generators shipped as .js. On a re-install we overwrite the
 // managed .cjs copies but must also delete these stale .js siblings, or the old
@@ -298,14 +301,15 @@ function installScripts(dir, release, opts) {
   }
   copyAsset(dir, INDEX_GUARD_SCRIPT, path.join(dir, INDEX_GUARD_SCRIPT), managed)
   copyAsset(dir, HOTFIX_SCRIPT, path.join(dir, HOTFIX_SCRIPT), managed)
+  if (releaseCommand(release)) copyAsset(dir, RELEASE_SCRIPT, path.join(dir, RELEASE_SCRIPT), managed)
   if (stagedPublishing(release)) copyAsset(dir, APPROVE_SCRIPT, path.join(dir, APPROVE_SCRIPT), managed)
 }
 
-// The approver needs the shared lib, which installScripts writes only when a
-// generator is enabled — so it follows the same condition.
-const stagedPublishing = (release) =>
-  Boolean(release.release && release.release.staged) &&
-  (release.changelog.enabled || release.releases.enabled)
+// Both scripts need the shared lib, which installScripts writes only when a
+// generator is enabled — so they follow the same condition.
+const generatorsEnabled = (release) => release.changelog.enabled || release.releases.enabled
+const releaseCommand = (release) => Boolean(release.release) && generatorsEnabled(release)
+const stagedPublishing = (release) => releaseCommand(release) && Boolean(release.release.staged)
 
 /**
  * The npm helpers for the release scripts, wired whether or not the version
@@ -315,6 +319,7 @@ const stagedPublishing = (release) =>
  */
 function wireReleaseHelpers(dir, release, { force }) {
   const helpers = {}
+  if (releaseCommand(release)) helpers.release = 'node scripts/release.cjs'
   if (stagedPublishing(release)) {
     helpers.approve = 'node scripts/approve-release.cjs'
     helpers.staged = 'npm stage list'

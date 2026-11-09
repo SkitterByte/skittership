@@ -21,7 +21,7 @@
  *                                "releasesFile": "RELEASES-<name>.md",
  *                                "productName": "<name>", "dir": "packages/x",
  *                                "npm": "@scope/x" } },
- *     "release":   { "staged": true }
+ *     "release":   { "staged": true, "test": "pnpm test", "preTag": ["<command>"] }
  *   }
  *
  * `releases.emptyRelease` is what a release with no user-facing notes says in
@@ -167,6 +167,15 @@ function validateRelease(release) {
   if (!isObject(release)) throw releaseError(' must be an object')
   if (release.staged !== undefined && typeof release.staged !== 'boolean') {
     throw releaseError('.staged must be true or false')
+  }
+  if (release.test !== undefined && (typeof release.test !== 'string' || !release.test.trim())) {
+    throw releaseError('.test must be a non-empty command string')
+  }
+  if (
+    release.preTag !== undefined &&
+    (!Array.isArray(release.preTag) || release.preTag.some((c) => typeof c !== 'string' || !c.trim()))
+  ) {
+    throw releaseError('.preTag must be an array of command strings')
   }
   return release
 }

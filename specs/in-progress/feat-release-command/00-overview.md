@@ -109,7 +109,7 @@ Each phase lives in its own file in this folder. Status: ⬜ not started ·
 | # | Phase | Status | File |
 |---|-------|--------|------|
 | 1 | Ship a generalised approve-release, opt-in | ✅ | [01-approve.md](01-approve.md) |
-| 2 | `release.cjs`: plan, `--yes`, `--push`, hooks | ⬜ | [02-release.md](02-release.md) |
+| 2 | `release.cjs`: plan, `--yes`, `--push`, hooks | ✅ | [02-release.md](02-release.md) |
 | 3 | Recorded-hash ancestry check and docs | ⬜ | [03-hash-check-and-docs.md](03-hash-check-and-docs.md) |
 
 Depends on feat-release-packages (the `packages` map and `--package`). Phase 1
@@ -139,3 +139,12 @@ does not, and can start first.
   as written, like `packages`; `packages.<name>.npm` joined the entry fields.
   Dogfood: this repo set `release.staged` and `update` adopted the managed
   copy (manifest refreshed, which also records the generators' new hashes).
+- 2026-11-09 — Phase 2: in package mode the bump and notes are written
+  first, so tests and hooks run against exactly the tree being committed; in
+  root mode they run before `<pm> version`, whose own hook writes the notes.
+  `--push` without `--yes` refuses. A failure before the commit names the
+  `git checkout` and, for a notes file that did not exist, the `rm` that
+  restore the tree. The plan says up front when a root `postversion` script
+  will make `--yes` refuse. Dogfood: this repo's `release` key added a
+  `release` helper to its package.json; its own releases still go through
+  `pnpm version`, which the plan reflects.

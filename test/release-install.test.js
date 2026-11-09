@@ -100,3 +100,28 @@ test('a malformed release refuses on load', () => {
     assert.throws(() => loadConfig(dir), /release/, JSON.stringify(release))
   }
 })
+
+test('a release key installs release.cjs and the release helper', () => {
+  for (const cmd of ['init', 'update']) {
+    const dir = project({ release: {} })
+    run(dir, cmd)
+    assert.ok(has(dir, 'scripts/release.cjs'), cmd)
+    assert.strictEqual(scriptsOf(dir).release, 'node scripts/release.cjs', cmd)
+  }
+})
+
+test('no release key: no release.cjs, no release helper — stays silent', () => {
+  for (const cmd of ['init', 'update']) {
+    const dir = project()
+    run(dir, cmd)
+    assert.ok(!has(dir, 'scripts/release.cjs'), cmd)
+    assert.strictEqual(scriptsOf(dir).release, undefined, cmd)
+  }
+})
+
+test('release.test and release.preTag are validated', () => {
+  for (const release of [{ test: '' }, { test: 3 }, { preTag: 'x' }, { preTag: [''] }, { preTag: [1] }]) {
+    const dir = project({ release })
+    assert.throws(() => loadConfig(dir), /release\.(test|preTag)/, JSON.stringify(release))
+  }
+})
